@@ -1,4 +1,4 @@
-# Rhythm-Bot 2.1.5 Search / Rich Text / Buttons!
+# 0xRhythm-Bot 0.1.0 Search / Rich Text / Buttons!
 
 -   New search command anything after !search will be searched against youtube and return the top 3 results
 -   Press the thumbs up reaction emoji to add the item to your queue
