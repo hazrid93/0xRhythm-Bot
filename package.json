@@ -5,7 +5,7 @@
     "main": "dist/app.js",
     "type": "commonjs",
     "scripts": {
-        "start": "cross-env  DOTENV_CONFIG_PATH=.env.local node --inspect --trace-warnings -r dotenv/config -r ts-node/register src/app.ts",
+        "start": "cross-env  DOTENV_CONFIG_PATH=.env.local node --trace-warnings -r dotenv/config -r ts-node/register src/app.ts",
         "start:stg": "cross-env NODE_ENV=staging nodemon --inspect --trace-warnings",
         "start:prod": "cross-env NODE_ENV=production node --trace-warnings dist/app",
         "build": "tsc",

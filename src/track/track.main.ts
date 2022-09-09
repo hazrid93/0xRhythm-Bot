@@ -1,14 +1,12 @@
 import { TrackData, SongProvider } from "./track.model"
 import { AudioResource, createAudioResource } from '@discordjs/voice';
 import playdl, { YouTubeStream, YouTubeVideo } from 'play-dl'
+import cp from "child_process";
 
 class Track implements TrackData {
     public readonly url: string;
     public readonly provider: SongProvider;
     public title: string;
-    public onStart?: () => void;
-    public onError?: (error: Error) => void;
-    public onFinish?: () => void;
 
     constructor(url, provider) {
         this.url = url;

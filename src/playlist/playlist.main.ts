@@ -9,76 +9,30 @@ import {
 	VoiceConnectionStatus,
     NoSubscriberBehavior
 } from '@discordjs/voice';
+import { randomUUID } from 'crypto'
+import cp from "child_process";
 import { promisify } from 'util';
 import { Track } from '../track' ;
 
 const wait = promisify(setTimeout);
 
 class Playlist {
-    public readonly voiceConnection: VoiceConnection;
 	public readonly audioPlayer: AudioPlayer;
+	public readonly guildId: string;
+	public readonly userId: string;
+
+    public childProcess: cp.ChildProcess;
 	public queue: Track[];
 	public queueLock = false;
-	public readyLock = false;
 
-    public constructor(voiceConnection: VoiceConnection) {
-		this.voiceConnection = voiceConnection;
+    public constructor(
+		guildId: string,
+		userId: string) {
 		this.audioPlayer = createAudioPlayer();
 		this.queue = [];
-
-        this.voiceConnection.on('stateChange', async (oldState, newState) => {
-            if (newState.status === VoiceConnectionStatus.Disconnected) {
-				if (newState.reason === VoiceConnectionDisconnectReason.WebSocketClose && newState.closeCode === 4014) {
-					/*
-						If the WebSocket closed with a 4014 code, this means that we should not manually attempt to reconnect,
-						but there is a chance the connection will recover itself if the reason of the disconnect was due to
-						switching voice channels. This is also the same code for the bot being kicked from the voice channel,
-						so we allow 5 seconds to figure out which scenario it is. If the bot has been kicked, we should destroy
-						the voice connection.
-					*/
-					try {
-						await entersState(this.voiceConnection, VoiceConnectionStatus.Connecting, 5_000);
-						// Probably moved voice channel
-					} catch {
-						this.voiceConnection.destroy();
-						// Probably removed from voice channel
-					}
-				} else if (this.voiceConnection.rejoinAttempts < 5) {
-					/*
-						The disconnect in this case is recoverable, and we also have <5 repeated attempts so we will reconnect.
-					*/
-					await wait((this.voiceConnection.rejoinAttempts + 1) * 5_000);
-					this.voiceConnection.rejoin();
-				} else {
-					/*
-						The disconnect in this case may be recoverable, but we have no more remaining attempts - destroy.
-					*/
-					this.voiceConnection.destroy();
-				}
-			} else if (newState.status === VoiceConnectionStatus.Destroyed) {
-				/*
-					Once destroyed, stop the subscription
-				*/
-				this.stop();
-			} else if (
-				!this.readyLock &&
-				(newState.status === VoiceConnectionStatus.Connecting || newState.status === VoiceConnectionStatus.Signalling)
-			) {
-				/*
-					In the Signalling or Connecting states, we set a 20 second time limit for the connection to become ready
-					before destroying the voice connection. This stops the voice connection permanently existing in one of these
-					states.
-				*/
-				this.readyLock = true;
-				try {
-					await entersState(this.voiceConnection, VoiceConnectionStatus.Ready, 20_000);
-				} catch {
-					if (this.voiceConnection.state.status !== VoiceConnectionStatus.Destroyed) this.voiceConnection.destroy();
-				} finally {
-					this.readyLock = false;
-				}
-			}
-        });
+		this.guildId = guildId;
+		this.userId = userId;
+		this.childProcess = null;
     }
 
     /**
@@ -104,6 +58,8 @@ class Playlist {
 	 * Attempts to play a Track from the queue, under unique guild
 	 */
 	private async processQueue(): Promise<void> {
+		const uuid = randomUUID();
+		const date = new Date().toISOString();
 		// If the queue is locked (already being processed), is empty, or the audio player is already playing something, return
 		if (this.queueLock || this.audioPlayer.state.status !== AudioPlayerStatus.Idle || this.queue.length === 0) {
 			return;
@@ -112,18 +68,49 @@ class Playlist {
 		this.queueLock = true;
 
 		// Take the first item from the queue. This is guaranteed to exist due to the non-empty check above.
-		const nextTrack = this.queue.shift()!;
+		const nextTrack: Track = this.queue.shift();
+
+		// create base64 encode of data buffer for data we want to pass to child process
+		const forkObj = {
+			title: nextTrack.title,
+			url: nextTrack.url,
+			provider: nextTrack.provider,
+			guildId: this.guildId,
+			userId: this.userId
+		};
+
 		try {
-			// Attempt to convert the Track into an AudioResource (i.e. start streaming the video)
-			const resource = await nextTrack.createAudioResource();
-			this.audioPlayer.play(resource);
-            this.voiceConnection.subscribe(this.audioPlayer);
+			const encoded = Buffer.from(JSON.stringify(forkObj),'utf-8').toString('base64');
+			if(this.childProcess == null){
+				const trackProcess = cp.fork(__dirname + './../player/child_player.ts', [encoded]);
+				this.childProcess = trackProcess;
+				trackProcess.once('error', (error) => {
+					console.error(`[${date}]-[${uuid}]-[PID:${this.childProcess.pid}] Child has an error: ${error.message}`);
+				});
+				
+				trackProcess.once('close', (code) => {
+					console.log(`[${date}]-[${uuid}]-[PID:${this.childProcess.pid}] Child process closed with code: ${code}`);
+				})
+
+				trackProcess.on('message', (message) => {
+					console.log(`[${date}]-[${uuid}]-[PID:${this.childProcess.pid}] Child message: ${message}`);
+				})
+			} else {
+				this.childProcess.send(encoded);
+			}
+      		
 			this.queueLock = false;
 		} catch (error) {
-			// If an error occurred, try the next item of the queue instead
-			nextTrack.onError(error as Error);
 			this.queueLock = false;
 			return this.processQueue();
+		}
+	}
+
+	public sendCommand(_command: string){
+		if(this.childProcess != null){
+			this.childProcess.send(_command);
+		} else {
+			console.warn("Fail to skip the current track");
 		}
 	}
 }

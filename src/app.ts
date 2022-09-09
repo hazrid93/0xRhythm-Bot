@@ -1,5 +1,6 @@
 const pidusage = require('pidusage');
-import {SongProvider } from "./track"
+import {SongProvider } from "./track";
+import { IPC_STATES_RESP, IPC_STATES_REQ } from './constants/ipcStates';
 import {
     VoiceConnectionStatus, 
     AudioPlayerStatus, 
@@ -11,13 +12,8 @@ import {
     joinVoiceChannel,
     NoSubscriberBehavior
 } from '@discordjs/voice';
-const fs = require('fs');
-const path = require('path');
-const cp = require("child_process");
-require('dotenv').config({ path: `./../.env.local` });
 import Discord, { Interaction, GuildMember, Snowflake } from 'discord.js';
 import { promisify } from 'util';
-import playdl from 'play-dl';
 import { Track } from './track'
 import { Playlist } from './playlist';
 
@@ -37,7 +33,7 @@ const client = new Client({
 client.login(clientToken);
 client.on('error', console.warn);
 client.on('ready', () => {
-    console.log('Client ready');
+    console.log('Main client ready');
 });
 
 /**
@@ -47,7 +43,9 @@ client.on('ready', () => {
 
 client.on('interactionCreate', async (interaction: Interaction)=> {
     if (!interaction.isCommand() || !interaction.guildId) return;
-    let subscription = subscriptions.get(interaction.guildId);
+    let guildId = interaction.guildId;
+    let subscription = subscriptions.get(guildId);
+    let userId = interaction.member.user.id;
 
     if (interaction.commandName === 'play') {
 		await interaction.deferReply();
@@ -58,14 +56,7 @@ client.on('interactionCreate', async (interaction: Interaction)=> {
         if (!subscription) {
 			if (interaction.member instanceof GuildMember && interaction.member.voice.channel) {
 				const channel = interaction.member.voice.channel;
-				subscription = new Playlist(
-					joinVoiceChannel({
-						channelId: channel.id,
-						guildId: channel.guild.id,
-						adapterCreator: channel.guild.voiceAdapterCreator,
-					}),
-				);
-				subscription.voiceConnection.on('error', console.warn);
+				subscription = new Playlist(guildId, userId);
 				subscriptions.set(interaction.guildId, subscription);
 			}
 		}
@@ -77,6 +68,7 @@ client.on('interactionCreate', async (interaction: Interaction)=> {
 		}
 
 		// Make sure the connection is ready before processing the user's request
+        /*
 		try {
 			await entersState(subscription.voiceConnection, VoiceConnectionStatus.Ready, 20e3);
 		} catch (error) {
@@ -84,13 +76,14 @@ client.on('interactionCreate', async (interaction: Interaction)=> {
 			await interaction.followUp('Failed to join voice channel within 20 seconds, please try again later!');
 			return;
 		}
-        
+        */
+
         try {
 			// Attempt to create a Track from the user's video URL
 			const track = new Track(url, SongProvider.YOUTUBE);
 			// Enqueue the track and reply a success message to the user
 			subscription.enqueue(track);
-			await interaction.followUp(`Enqueued **${track.title}**`);
+			await interaction.followUp(`Enqueued track successfully`);
 		} catch (error) {
 			console.warn(error);
 			await interaction.reply('Failed to play track, please try again later!');
@@ -100,7 +93,7 @@ client.on('interactionCreate', async (interaction: Interaction)=> {
 			// Calling .stop() on an AudioPlayer causes it to transition into the Idle state. Because of a state transition
 			// listener defined in music/subscription.ts, transitions into the Idle state mean the next track from the queue
 			// will be loaded and played.
-			subscription.audioPlayer.stop();
+			subscription.sendCommand(IPC_STATES_REQ.SKIP_VOICE_CONNECTION);
 			await interaction.reply('Skipped song!');
 		} else {
 			await interaction.reply('Not playing in this server!');
@@ -125,21 +118,23 @@ client.on('interactionCreate', async (interaction: Interaction)=> {
 		}
 	} else if (interaction.commandName === 'pause') {
 		if (subscription) {
-			subscription.audioPlayer.pause();
-			await interaction.reply({ content: `Paused!`, ephemeral: true });
+			subscription.sendCommand(IPC_STATES_REQ.PAUSE_VOICE_CONNECTION);
+			await interaction.reply({ content: `Paused!`, ephemeral: false });
 		} else {
 			await interaction.reply('Not playing in this server!');
 		}
 	} else if (interaction.commandName === 'resume') {
 		if (subscription) {
-			subscription.audioPlayer.unpause();
-			await interaction.reply({ content: `Unpaused!`, ephemeral: true });
+			subscription.sendCommand(IPC_STATES_REQ.RESUME_VOICE_CONNECTION);
+			await interaction.reply({ content: `Unpaused!`, ephemeral: false });
 		} else {
 			await interaction.reply('Not playing in this server!');
 		}
 	} else if (interaction.commandName === 'leave') {
 		if (subscription) {
+            /*
 			subscription.voiceConnection.destroy();
+            */
 			subscriptions.delete(interaction.guildId);
 			await interaction.reply({ content: `Left channel!`, ephemeral: true });
 		} else {
