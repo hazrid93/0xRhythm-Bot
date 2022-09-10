@@ -9,10 +9,12 @@ import {
 	VoiceConnectionStatus,
     NoSubscriberBehavior
 } from '@discordjs/voice';
+import { removeSubscription } from "./../app";
 import { randomUUID } from 'crypto'
 import cp from "child_process";
 import { promisify } from 'util';
 import { Track } from '../track' ;
+import { IPC_STATES_RESP } from './../constants/ipcStates';
 
 const wait = promisify(setTimeout);
 
@@ -22,6 +24,7 @@ class Playlist {
 	public readonly userId: string;
 
     public childProcess: cp.ChildProcess;
+	public playerState: AudioPlayerStatus;
 	public queue: Track[];
 	public queueLock = false;
 
@@ -33,6 +36,7 @@ class Playlist {
 		this.guildId = guildId;
 		this.userId = userId;
 		this.childProcess = null;
+		this.playerState = null;
     }
 
     /**
@@ -84,25 +88,62 @@ class Playlist {
 			if(this.childProcess == null){
 				const trackProcess = cp.fork(__dirname + './../player/child_player.ts', [encoded]);
 				this.childProcess = trackProcess;
-				trackProcess.once('error', (error) => {
+				trackProcess.on('error', (error) => {
 					console.error(`[${date}]-[${uuid}]-[PID:${this.childProcess.pid}] Child has an error: ${error.message}`);
 				});
 				
 				trackProcess.once('close', (code) => {
-					console.log(`[${date}]-[${uuid}]-[PID:${this.childProcess.pid}] Child process closed with code: ${code}`);
+					console.log(`[${date}]-[${uuid}] Child process closed with code: ${code}`);
+					this.childProcess.kill();
+					this.childProcess = null;
+					this.stop();
 				})
 
-				trackProcess.on('message', (message) => {
-					console.log(`[${date}]-[${uuid}]-[PID:${this.childProcess.pid}] Child message: ${message}`);
+				trackProcess.once('exit', (code) => {
+					console.log(`[${date}]-[${uuid}]-[PID:${this.childProcess.pid}] Child process exited with code: ${code}`);
+					this.childProcess.kill();
+					this.childProcess = null;
+					this.stop();
+				})
+
+				trackProcess.on('message', (_message: string) => {
+					this.commandHandler(_message);
 				})
 			} else {
 				this.childProcess.send(encoded);
 			}
-      		
 			this.queueLock = false;
 		} catch (error) {
 			this.queueLock = false;
 			return this.processQueue();
+		}
+	}
+
+	public commandHandler(_message: string){
+		const uuid = randomUUID();
+		const date = new Date().toISOString();
+		try{
+			if(_message != null && _message.length > 0) {
+				console.log(`[${date}]-[${uuid}]-[PID:${this.childProcess.pid}] Child message: ${_message}`);
+				switch(_message){
+					case IPC_STATES_RESP.SONG_IDLE:
+						this.playerState = AudioPlayerStatus.Idle
+						break;
+					case IPC_STATES_RESP.SONG_PAUSED:
+						this.playerState = AudioPlayerStatus.Paused
+						break;
+					case IPC_STATES_RESP.SONG_PLAYING:
+						this.playerState = AudioPlayerStatus.Playing
+						break;
+					case IPC_STATES_RESP.REMOVE_GUILD_SUBSCRIPTION:
+						removeSubscription(this.guildId, uuid);
+						break;
+					default:
+						break;
+				}
+			}
+		} catch(ex) {
+			console.error(`[${date}]-[${uuid}]-[PID:${this.childProcess.pid}] Fail to process child message: ${_message.toString()}, reason: ${ex.message}`);
 		}
 	}
 

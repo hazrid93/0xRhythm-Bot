@@ -33,13 +33,20 @@ const client = new Client({
 client.login(clientToken);
 client.on('error', console.warn);
 client.on('ready', () => {
-    console.log('Main client ready');
+    console.log('Main client ready, PID: ' +  process.pid);
 });
 
 /**
  * Maps guild IDs (Snowflake is guildId in discord special UUID format) to playlist, which exist if the bot has an active VoiceConnection to the guild.
  */
  const subscriptions = new Map<Snowflake, Playlist>();
+
+ // to be called by playlist when child process detect its disconnected
+function removeSubscription(_subscription: Snowflake, _uuid: string){
+    subscriptions.delete(_subscription);
+    console.log(`[${new Date().toISOString()}]-[${_uuid}]-[PID:${process.pid}] Removed guild subscription with id: ${_subscription}`);
+
+}
 
 client.on('interactionCreate', async (interaction: Interaction)=> {
     if (!interaction.isCommand() || !interaction.guildId) return;
@@ -67,17 +74,6 @@ client.on('interactionCreate', async (interaction: Interaction)=> {
 			return;
 		}
 
-		// Make sure the connection is ready before processing the user's request
-        /*
-		try {
-			await entersState(subscription.voiceConnection, VoiceConnectionStatus.Ready, 20e3);
-		} catch (error) {
-			console.warn(error);
-			await interaction.followUp('Failed to join voice channel within 20 seconds, please try again later!');
-			return;
-		}
-        */
-
         try {
 			// Attempt to create a Track from the user's video URL
 			const track = new Track(url, SongProvider.YOUTUBE);
@@ -101,8 +97,7 @@ client.on('interactionCreate', async (interaction: Interaction)=> {
 	} else if (interaction.commandName === 'queue') {
 		// Print out the current queue, including up to the next 5 tracks to be played.
 		if (subscription) {
-            const playerState = subscription.audioPlayer.state;
-            if(playerState.status === AudioPlayerStatus.Idle){
+            if(subscription.playerState === AudioPlayerStatus.Idle){
                 await interaction.reply('Nothing is currently playing');
                 return;
             } else {
@@ -111,7 +106,7 @@ client.on('interactionCreate', async (interaction: Interaction)=> {
                 .map((data, index) => {
                     return `${index+1} - ${data.title}`;
                 }).join('\n');
-                await interaction.reply(queue);
+                await interaction.reply(queue? queue : "No item are queued");
             }
 		} else {
 			await interaction.reply('Not playing in this server!');
@@ -132,11 +127,9 @@ client.on('interactionCreate', async (interaction: Interaction)=> {
 		}
 	} else if (interaction.commandName === 'leave') {
 		if (subscription) {
-            /*
-			subscription.voiceConnection.destroy();
-            */
+            subscription.sendCommand(IPC_STATES_REQ.LEAVE_VOICE_CONNECTION);
 			subscriptions.delete(interaction.guildId);
-			await interaction.reply({ content: `Left channel!`, ephemeral: true });
+			await interaction.reply({ content: `Left channel!`, ephemeral: false });
 		} else {
 			await interaction.reply('Not playing in this server!');
 		}
@@ -144,3 +137,5 @@ client.on('interactionCreate', async (interaction: Interaction)=> {
 		await interaction.reply('Unknown command');
 	}
 });
+
+export { removeSubscription };
