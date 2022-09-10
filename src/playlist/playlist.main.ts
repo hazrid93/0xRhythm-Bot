@@ -15,6 +15,7 @@ import cp from "child_process";
 import { promisify } from 'util';
 import { Track } from '../track' ;
 import { IPC_STATES_RESP } from './../constants/ipcStates';
+import { ForkObject } from './../player'
 
 const wait = promisify(setTimeout);
 
@@ -75,7 +76,7 @@ class Playlist {
 		const nextTrack: Track = this.queue.shift();
 
 		// create base64 encode of data buffer for data we want to pass to child process
-		const forkObj = {
+		const forkObj: ForkObject = {
 			title: nextTrack.title,
 			url: nextTrack.url,
 			provider: nextTrack.provider,

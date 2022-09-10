@@ -18,7 +18,6 @@ const cp = require("child_process");
 import Discord, { Interaction, GuildMember, Snowflake } from 'discord.js';
 import { promisify } from 'util';
 import playdl from 'play-dl';
-import { defaultMaxListeners } from "events";
 import { randomUUID } from 'crypto'
 
 const wait = promisify(setTimeout);
