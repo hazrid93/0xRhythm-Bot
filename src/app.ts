@@ -14,6 +14,7 @@ import {
 } from '@discordjs/voice';
 import Discord, { Interaction, GuildMember, Snowflake } from 'discord.js';
 import { promisify } from 'util';
+import playdl from 'play-dl';
 import { Track } from './track'
 import { Playlist } from './playlist';
 
@@ -49,41 +50,52 @@ function removeSubscription(_subscription: Snowflake, _uuid: string){
 }
 
 client.on('interactionCreate', async (interaction: Interaction)=> {
-    if (!interaction.isCommand() || !interaction.guildId) return;
+    if (!interaction.isChatInputCommand()){
+        return;
+    }
+    if(!interaction.guildId){
+        return;
+    }
     let guildId = interaction.guildId;
     let subscription = subscriptions.get(guildId);
     let userId = interaction.member.user.id;
-
     if (interaction.commandName === 'play') {
-		await interaction.deferReply();
-        // Extract the video URL from the command
-		const url = interaction.options.get('url')!.value as string;
-        // If a connection to the guild doesn't already exist and the user is in a voice channel, join that channel
-		// and create a subscription.
-        if (!subscription) {
-			if (interaction.member instanceof GuildMember && interaction.member.voice.channel) {
-				const channel = interaction.member.voice.channel;
-				subscription = new Playlist(guildId, userId);
-				subscriptions.set(interaction.guildId, subscription);
-			}
-		}
+        if(interaction.options.getSubcommand() === 'url'){
+            // Extract the video URL from the command
+            const url = interaction.options.get('link')!.value as string;
+            await interaction.deferReply();
+            // If a connection to the guild doesn't already exist and the user is in a voice channel, join that channel
+            // and create a subscription.
+            if (!subscription) {
+                if (interaction.member instanceof GuildMember && interaction.member.voice.channel) {
+                    const channel = interaction.member.voice.channel;
+                    subscription = new Playlist(guildId, userId);
+                    subscriptions.set(interaction.guildId, subscription);
+                }
+            }
 
-		// If there is no subscription, tell the user they need to join a channel.
-		if (!subscription) {
-			await interaction.followUp('Join a voice channel and then try that again!');
-			return;
-		}
+            // If there is no subscription, tell the user they need to join a channel.
+            if (!subscription) {
+                await interaction.followUp('Join a voice channel and then try that again!');
+                return;
+            }
 
-        try {
-			// Attempt to create a Track from the user's video URL
-			const track = new Track(url, SongProvider.YOUTUBE);
-			// Enqueue the track and reply a success message to the user
-			subscription.enqueue(track);
-			await interaction.followUp(`Enqueued track successfully`);
-		} catch (error) {
-			console.warn(error);
-			await interaction.reply('Failed to play track, please try again later!');
-		}
+            try {
+                // validate the track url
+                if(playdl.yt_validate(url) === 'video'){
+                    // Attempt to create a Track from the user's video URL
+                    const track = new Track(url, SongProvider.YOUTUBE);
+                    // Enqueue the track and reply a success message to the user
+                    subscription.enqueue(track);
+                    await interaction.followUp(`Track added to queue`);
+                } else {
+                    await interaction.followUp(`Track format is not supported for either playlist or livestream`);
+                }
+            } catch (error) {
+                console.warn(error);
+                await interaction.reply('Failed to play track, please try again later!');
+            }
+        }
     } else if (interaction.commandName === 'skip') {
 		if (subscription) {
 			// Calling .stop() on an AudioPlayer causes it to transition into the Idle state. Because of a state transition
@@ -97,10 +109,11 @@ client.on('interactionCreate', async (interaction: Interaction)=> {
 	} else if (interaction.commandName === 'queue') {
 		// Print out the current queue, including up to the next 5 tracks to be played.
 		if (subscription) {
-            if(subscription.playerState === AudioPlayerStatus.Idle){
+            if(subscription.playerState === AudioPlayerStatus.Idle && subscription.queue.length == 0){
                 await interaction.reply('Nothing is currently playing');
                 return;
             } else {
+                console.log("queue: " + JSON.stringify(subscription.queue));
                 const queue =  subscription.queue
                 .slice(0,5)
                 .map((data, index) => {

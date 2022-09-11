@@ -15,19 +15,44 @@ const commands = [
 	new SlashCommandBuilder().setName('server').setDescription('Replies with server info!'),
 	new SlashCommandBuilder().setName('user').setDescription('Replies with user info!'),
 	new SlashCommandBuilder().setName('play')
-		.setDescription('Play audio in the voice channel')
-		.addStringOption(option =>
-			option.setName('url')
-				.setDescription('The url to play from youtube')
-				.setRequired(true)),
+		.setDescription('Play youtube audio in the voice channel')
+		.addSubcommand(subcommand =>
+			subcommand.setName('url')
+				.setDescription('Url to play from youtube')
+				.addStringOption(option =>
+					option.setName('link')
+						.setDescription('Link of the track')
+						.setRequired(true)))
+		.addSubcommand(subcommand =>
+			subcommand.setName('search')
+				.setDescription('Search track from youtube')
+				.addStringOption(option =>
+					option.setName('name')
+						.setDescription('Name of the track')
+						.setRequired(true))),
+	new SlashCommandBuilder().setName('playsc')
+		.setDescription('Play soundcloud audio in the voice channel')
+		.addSubcommand(subcommand =>
+			subcommand.setName('url')
+				.setDescription('Url to play from soundcloud')
+				.addStringOption(option =>
+					option.setName('link')
+						.setDescription('Link of the track')
+						.setRequired(true)))
+		.addSubcommand(subcommand =>
+			subcommand.setName('search')
+				.setDescription('Search track from soundcloud')
+				.addStringOption(option =>
+					option.setName('name')
+						.setDescription('Name of the track')
+						.setRequired(true))),
 	new SlashCommandBuilder().setName('search')
-	.setDescription('Search for audio in youtube/soundcloud')
-	.addStringOption(option =>
-		option.setName('name')
-			.setDescription('song name to search for')
-			.setRequired(true)),
-]
-	.map(command => command.toJSON());
+		.setDescription('Search for audio in youtube/soundcloud')
+		.addStringOption(option =>
+			option.setName('name')
+				.setDescription('Name of the track to search')
+				.setRequired(true))
+	].map(command => command.toJSON());
 
 const rest = new REST({ version: '10' }).setToken(clientToken);
 

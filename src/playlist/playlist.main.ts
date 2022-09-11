@@ -14,13 +14,12 @@ import { randomUUID } from 'crypto'
 import cp from "child_process";
 import { promisify } from 'util';
 import { Track } from '../track' ;
-import { IPC_STATES_RESP } from './../constants/ipcStates';
+import { IPC_STATES_REQ, IPC_STATES_RESP } from './../constants/ipcStates';
 import { ForkObject } from './../player'
 
 const wait = promisify(setTimeout);
 
 class Playlist {
-	public readonly audioPlayer: AudioPlayer;
 	public readonly guildId: string;
 	public readonly userId: string;
 
@@ -32,7 +31,6 @@ class Playlist {
     public constructor(
 		guildId: string,
 		userId: string) {
-		this.audioPlayer = createAudioPlayer();
 		this.queue = [];
 		this.guildId = guildId;
 		this.userId = userId;
@@ -56,7 +54,7 @@ class Playlist {
 	public stop() {
 		this.queueLock = true;
 		this.queue = [];
-		this.audioPlayer.stop(true);
+		this.sendCommand(IPC_STATES_REQ.SKIP_VOICE_CONNECTION);
 	}
 
     /**
@@ -66,7 +64,9 @@ class Playlist {
 		const uuid = randomUUID();
 		const date = new Date().toISOString();
 		// If the queue is locked (already being processed), is empty, or the audio player is already playing something, return
-		if (this.queueLock || this.audioPlayer.state.status !== AudioPlayerStatus.Idle || this.queue.length === 0) {
+		if (this.queueLock 
+			|| (this.playerState !== AudioPlayerStatus.Idle && this.playerState != null)
+			|| this.queue.length === 0) {
 			return;
 		}
 		// Lock the queue to guarantee safe access
@@ -128,7 +128,8 @@ class Playlist {
 				console.log(`[${date}]-[${uuid}]-[PID:${this.childProcess.pid}] Child message: ${_message}`);
 				switch(_message){
 					case IPC_STATES_RESP.SONG_IDLE:
-						this.playerState = AudioPlayerStatus.Idle
+						this.playerState = AudioPlayerStatus.Idle;
+						this.processQueue()
 						break;
 					case IPC_STATES_RESP.SONG_PAUSED:
 						this.playerState = AudioPlayerStatus.Paused

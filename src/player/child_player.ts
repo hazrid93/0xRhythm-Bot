@@ -15,7 +15,7 @@ import {
   joinVoiceChannel
 } from '@discordjs/voice';
 const cp = require("child_process");
-import Discord, { Interaction, GuildMember, Snowflake } from 'discord.js';
+import Discord, { Interaction, GuildMember, Snowflake, Channel } from 'discord.js';
 import { promisify } from 'util';
 import playdl from 'play-dl';
 import { randomUUID } from 'crypto'
@@ -53,6 +53,8 @@ client.on('ready', async () => {
   const guildId: string = decoded.guildId;
   const userId: string = decoded.userId;
   const guild = client.guilds.cache.get(guildId);
+  const user = guild.members.cache.get(userId);
+  user.send("test");
   const userVoiceChannel = guild.members.cache.get(userId).voice.channel;
   await execute(url, userVoiceChannel, guild);
 });
@@ -68,7 +70,11 @@ async function execute(_url, _voiceChannel, _guild){
   
     const player: AudioPlayer = createAudioPlayer();
     currentPlayer = player;
-    let stream = await playdl.stream(_url);
+
+    let streamOptions = {
+      quality: 0
+    }
+    let stream = await playdl.stream(_url, streamOptions);
     // Attempt to convert the Track into an AudioResource (i.e. start streaming the video)
     let resource = createAudioResource(stream.stream, {
       inputType: stream.type
