@@ -15,7 +15,7 @@ import {
   joinVoiceChannel
 } from '@discordjs/voice';
 const cp = require("child_process");
-import Discord, { Interaction, GuildMember, Snowflake, Channel } from 'discord.js';
+import Discord, { Guild, Interaction, GuildMember, Snowflake, Channel, TextChannel, GuildBasedChannel, VoiceBasedChannel } from 'discord.js';
 import { promisify } from 'util';
 import playdl from 'play-dl';
 import { randomUUID } from 'crypto'
@@ -26,10 +26,14 @@ const { Client, GatewayIntentBits, PermissionFlagsBits,
   EmbedBuilder, SelectMenuBuilder, BaseInteraction } = Discord;
 
 const clientToken = process.env.STAGING_TOKEN;
+// timeout for disconnection
+let timeoutId;
+
 // bot status lock
 let readyLock = false;
 let currentVoiceConnection: VoiceConnection = null;
 let currentPlayer: AudioPlayer = null;
+let guild: Guild = null; 
 
 const client = new Client({ 
   intents: [GatewayIntentBits.Guilds, 
@@ -52,12 +56,21 @@ client.on('ready', async () => {
   const provider: SongProvider = decoded.provider;
   const guildId: string = decoded.guildId;
   const userId: string = decoded.userId;
-  const guild = client.guilds.cache.get(guildId);
-  const user = guild.members.cache.get(userId);
-  user.send("test");
+  guild = client.guilds.cache.get(guildId);
+  sendMessageToGuild("Joining the voice channel...", guild);
   const userVoiceChannel = guild.members.cache.get(userId).voice.channel;
   await execute(url, userVoiceChannel, guild);
 });
+
+function sendMessageToGuild(_message: string, _guild: Guild){
+  if(currentVoiceConnection == null){
+    _guild.channels.cache.forEach(_channel => {
+      if(_channel.isTextBased()){
+        _channel.send(_message)
+      }
+    });
+  }
+}
 
 async function execute(_url, _voiceChannel, _guild){
     //voice related
@@ -83,10 +96,19 @@ async function execute(_url, _voiceChannel, _guild){
     player.addListener("stateChange", (_, newOne) => {
       if (newOne.status == AudioPlayerStatus.Idle) {
         process.send(IPC_STATES_RESP.SONG_IDLE);
+        // set timeout to disconnect in 30 second of idling
+        timeoutId = setTimeout(()=> {
+          if(currentVoiceConnection){
+            sendMessageToGuild("Leaving the voice channel...", _guild);
+            currentVoiceConnection.destroy();
+          }
+        }, 30*1000);
       } else if(newOne.status == AudioPlayerStatus.Paused){
         process.send(IPC_STATES_RESP.SONG_PAUSED);
       } else if(newOne.status == AudioPlayerStatus.Playing){
         process.send(IPC_STATES_RESP.SONG_PLAYING);
+        clearTimeout(timeoutId);
+        timeoutId = null;
       }
     });
     

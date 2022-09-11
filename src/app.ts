@@ -14,7 +14,7 @@ import {
 } from '@discordjs/voice';
 import Discord, { Interaction, GuildMember, Snowflake } from 'discord.js';
 import { promisify } from 'util';
-import playdl from 'play-dl';
+import playdl, { YouTubePlayList, YouTubeVideo } from 'play-dl';
 import { Track } from './track'
 import { Playlist } from './playlist';
 
@@ -46,7 +46,6 @@ client.on('ready', () => {
 function removeSubscription(_subscription: Snowflake, _uuid: string){
     subscriptions.delete(_subscription);
     console.log(`[${new Date().toISOString()}]-[${_uuid}]-[PID:${process.pid}] Removed guild subscription with id: ${_subscription}`);
-
 }
 
 client.on('interactionCreate', async (interaction: Interaction)=> {
@@ -56,46 +55,60 @@ client.on('interactionCreate', async (interaction: Interaction)=> {
     if(!interaction.guildId){
         return;
     }
+    
     let guildId = interaction.guildId;
     let subscription = subscriptions.get(guildId);
     let userId = interaction.member.user.id;
     if (interaction.commandName === 'play') {
-        if(interaction.options.getSubcommand() === 'url'){
-            // Extract the video URL from the command
-            const url = interaction.options.get('link')!.value as string;
-            await interaction.deferReply();
-            // If a connection to the guild doesn't already exist and the user is in a voice channel, join that channel
-            // and create a subscription.
-            if (!subscription) {
-                if (interaction.member instanceof GuildMember && interaction.member.voice.channel) {
-                    const channel = interaction.member.voice.channel;
-                    subscription = new Playlist(guildId, userId);
-                    subscriptions.set(interaction.guildId, subscription);
-                }
+        
+        // Extract the video URL from the command
+        const url = interaction.options.get('link')!.value as string;
+        await interaction.deferReply();
+        // If a connection to the guild doesn't already exist and the user is in a voice channel, join that channel
+        // and create a subscription.
+        if (!subscription) {
+            if (interaction.member instanceof GuildMember && interaction.member.voice.channel) {
+                const channel = interaction.member.voice.channel;
+                subscription = new Playlist(guildId, userId);
+                subscriptions.set(interaction.guildId, subscription);
             }
+        }
 
-            // If there is no subscription, tell the user they need to join a channel.
-            if (!subscription) {
-                await interaction.followUp('Join a voice channel and then try that again!');
-                return;
-            }
+        // If there is no subscription, tell the user they need to join a channel.
+        if (!subscription) {
+            await interaction.followUp('Join a voice channel and then try that again!');
+            return;
+        }
 
-            try {
+        try {
+            if(interaction.options.getSubcommand() === 'youtube_url'){
+                let trackType = playdl.yt_validate(url);
                 // validate the track url
-                if(playdl.yt_validate(url) === 'video'){
+                if(trackType === 'video'){
                     // Attempt to create a Track from the user's video URL
                     const track = new Track(url, SongProvider.YOUTUBE);
                     // Enqueue the track and reply a success message to the user
                     subscription.enqueue(track);
                     await interaction.followUp(`Track added to queue`);
+                } else if(trackType === 'playlist'){
+                    // get youtube playlist, skip hidden videos
+                    const playlist: YouTubePlayList = await playdl.playlist_info(url, { incomplete : true })
+                    const videos: YouTubeVideo[] = await playlist.all_videos();
+                    videos.forEach(_video =>{
+                        const track = new Track(_video.url, SongProvider.YOUTUBE);
+                        subscription.strictEnqueue(track);
+                    });
+                    subscription.startProcessQueue()
+                    await interaction.followUp(`Playlist added to queue`);
                 } else {
-                    await interaction.followUp(`Track format is not supported for either playlist or livestream`);
+                    await interaction.followUp(`Track format is not supported!`);
                 }
-            } catch (error) {
-                console.warn(error);
-                await interaction.reply('Failed to play track, please try again later!');
             }
+        } catch (error) {
+            console.warn(error);
+            await interaction.reply('Failed to play track, please try again later!');
         }
+        
     } else if (interaction.commandName === 'skip') {
 		if (subscription) {
 			// Calling .stop() on an AudioPlayer causes it to transition into the Idle state. Because of a state transition
@@ -117,7 +130,7 @@ client.on('interactionCreate', async (interaction: Interaction)=> {
                 const queue =  subscription.queue
                 .slice(0,5)
                 .map((data, index) => {
-                    return `${index+1} - ${data.title}`;
+                    return `${index+1} - [${data.title}] - ${data.url}`;
                 }).join('\n');
                 await interaction.reply(queue? queue : "No item are queued");
             }

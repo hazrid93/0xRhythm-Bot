@@ -48,6 +48,16 @@ class Playlist {
 		this.processQueue();
 	}
 
+	// queue only without processing
+	public strictEnqueue(track: Track) {
+		this.queue.push(track);
+	}
+
+	// manually start the queue processs, mainly use for playlist
+	public startProcessQueue() {
+		this.processQueue();
+	}
+
     /**
 	 * Stops audio playback and empties the queue
 	 */
