@@ -126,7 +126,6 @@ client.on('interactionCreate', async (interaction: Interaction)=> {
                 await interaction.reply('Nothing is currently playing');
                 return;
             } else {
-                console.log("queue: " + JSON.stringify(subscription.queue));
                 const queue =  subscription.queue
                 .slice(0,5)
                 .map((data, index) => {

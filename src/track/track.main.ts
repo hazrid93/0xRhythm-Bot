@@ -21,7 +21,6 @@ class Track implements TrackData {
      public createAudioResource(): Promise<AudioResource<Track>> {
 		return new Promise(async (resolve, reject) => {
             try { 
-    
                 // create audio stream from resource
                 let audioStream = await playdl.stream(this.url);
                 let resource = createAudioResource(audioStream.stream, {
@@ -52,7 +51,6 @@ class Track implements TrackData {
         let title;;
         try {
             let yt_info: InfoData = await playdl.video_basic_info(_url, { htmldata : false });
-            console.log("yt_info: " + JSON.stringify(yt_info));
             title =  (yt_info?.video_details?.title) ? yt_info?.video_details?.title : 'NOT_AVAILABLE';
             return (title) ? title : 'NOT_AVAILABLE';
         } catch (ex) {

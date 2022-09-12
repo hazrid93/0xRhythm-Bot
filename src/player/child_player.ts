@@ -18,7 +18,10 @@ const cp = require("child_process");
 import Discord, { Guild, Interaction, GuildMember, Snowflake, Channel, TextChannel, GuildBasedChannel, VoiceBasedChannel } from 'discord.js';
 import { promisify } from 'util';
 import playdl from 'play-dl';
-import { randomUUID } from 'crypto'
+import { randomUUID } from 'crypto';
+const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
+import ffmpeg from 'fluent-ffmpeg';
+import { PassThrough, Readable, Writable } from "stream";
 
 const wait = promisify(setTimeout);
 const { Client, GatewayIntentBits, PermissionFlagsBits, 
@@ -80,18 +83,32 @@ async function execute(_url, _voiceChannel, _guild){
       adapterCreator: _voiceChannel.guild.voiceAdapterCreator
     });
     currentVoiceConnection = voiceConnection;;
-  
     const player: AudioPlayer = createAudioPlayer();
     currentPlayer = player;
-
     let streamOptions = {
       quality: 0
     }
-    let stream = await playdl.stream(_url, streamOptions);
+    let passStream = new PassThrough();
+    let playDlStream =  await playdl.stream(_url, streamOptions);
+    let ffmpegStream = ffmpeg(playDlStream.stream)
+        .format('mp3')
+        .outputOptions(["-af bass=g=3", "-af treble=g=0" , "-af volume=1.0"])
+        .on('codecData', function(data) {
+            console.log('Input is ' + data.audio + ' audio');
+        })
+        .on('start', function(commandLine) {
+            console.log('Spawned Ffmpeg with command: ' + commandLine);
+        })
+        .on('error', function(err) {
+            console.log('An error occurred: ' + err.message);
+        })
+        .on('end', function() {
+           
+        }).pipe(passStream, { end: true });
+    
+
     // Attempt to convert the Track into an AudioResource (i.e. start streaming the video)
-    let resource = createAudioResource(stream.stream, {
-      inputType: stream.type
-    })
+    let resource = createAudioResource(passStream);
     player.play(resource);
     player.addListener("stateChange", (_, newOne) => {
       if (newOne.status == AudioPlayerStatus.Idle) {
