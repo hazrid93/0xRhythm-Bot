@@ -1,10 +1,10 @@
 import mongoose from 'mongoose';
 import { connectToServer, getConnection } from '../utils';
-import { User } from './';'
+import { User } from './';
 type Guild = {
     name: string;
     guildId: string;
-    users: User[];
+    users?: User[];
 }
 
 // collection: `Guilds`

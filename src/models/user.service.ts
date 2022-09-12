@@ -1,12 +1,12 @@
 
 import mongoose, { Model} from 'mongoose';
-import { getUserModel, User, Track } from './';
+import { getUserModel, User } from './';
 import { randomUUID } from 'crypto';
 
-function createUser(_user: User){
+async function createUser(_user: User){
     let response = null;
     // replace Model<User> with Model<any> if theres issue
-    getUserModel(async(UserModel: Model<any>) => {
+    await getUserModel(async(UserModel: Model<any>) => {
         const payload = new UserModel({
             name: _user.name,
             userId: _user.userId,
@@ -14,7 +14,7 @@ function createUser(_user: User){
             tracks: _user.tracks
         })
         try {
-            const mongoRes =  await payload.save();
+            const mongoRes = payload.save();
             response = mongoRes;
             console.log(`[${new Date().toISOString()}]-[${randomUUID()}]-[PID:${process.pid}] User inserted into database successfully : ${mongoRes}`);
         }
@@ -26,11 +26,31 @@ function createUser(_user: User){
     return response;
 }
 
-function findUserById(_id: string){
+async function updateUserById(_id: string,_user: User){
     let response = null;
-    getUserModel(async(UserModel: Model<any>) => {
+    await getUserModel(async(UserModel: Model<any>) => {
+        const options = { new: true };// return model after updated;
         try {
-            const mongoRes =  await UserModel.findOne({id: _id});
+            const mongoRes = UserModel.findByIdAndUpdate(_id, _user, options);
+            response = mongoRes;
+            console.log(`[${new Date().toISOString()}]-[${randomUUID()}]-[PID:${process.pid}] User updated successfully`);
+        }
+        catch (ex) {
+            console.error(`[${new Date().toISOString()}]-[${randomUUID()}]-[PID:${process.pid}] Fail to update user into database, reason: ${ex.message}`);
+        }
+    });
+
+    return response;
+}
+
+async function findUserById(_id: string){
+    let response = null;
+    await getUserModel(async(UserModel: Model<any>) => {
+        try {
+            const mongoRes = UserModel
+                .findOne({id: _id})
+                .populate('guild', 'name guildId -_id')
+                .select('name userId guild tracks');
             if(!mongoRes){
                 // throw error
                 console.error(`[${new Date().toISOString()}]-[${randomUUID()}]-[PID:${process.pid}] User does not exist!`);
@@ -45,11 +65,13 @@ function findUserById(_id: string){
     return response;
 }
 
-function findUserByUserId(_uid: string){
+async function findUserByUserId(_uid: string){
     let response = null;
-    getUserModel(async(UserModel: Model<any>) => {
+    await getUserModel(async(UserModel: Model<any>) => {
         try {
-            const mongoRes =  await UserModel.findOne({userId: _uid});
+            const mongoRes = UserModel.findOne({userId: _uid})
+                .populate('guild', 'name guildId -_id')
+                .select('name userId guild tracks');
             if(!mongoRes){
                 // throw error
                 console.error(`[${new Date().toISOString()}]-[${randomUUID()}]-[PID:${process.pid}] User does not exist!`);
@@ -64,11 +86,11 @@ function findUserByUserId(_uid: string){
     return response;
 }
 
-function deleteUserById(_id: string){
+async function deleteUserById(_id: string){
     let response = null;
-    getUserModel(async(UserModel: Model<any>) => {
+    await getUserModel(async(UserModel: Model<any>) => {
         try {
-            const mongoRes =  await UserModel.findByIdAndDelete();
+            const mongoRes = UserModel.findByIdAndDelete();
             response = mongoRes;
             console.log(`[${new Date().toISOString()}]-[${randomUUID()}]-[PID:${process.pid}] User deleted from database successfully : ${mongoRes}`);
         }
@@ -81,4 +103,4 @@ function deleteUserById(_id: string){
 }
 
 
-export { createUser };
+export { createUser, updateUserById, deleteUserById, findUserByUserId, findUserById};

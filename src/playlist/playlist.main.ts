@@ -15,25 +15,33 @@ import cp from "child_process";
 import { promisify } from 'util';
 import { Track } from '../track' ;
 import { IPC_STATES_REQ, IPC_STATES_RESP } from './../constants/ipcStates';
-import { ForkObject } from './../player'
+import { ForkObject } from './../player';
+import { 
+	Guild, updateGuildById, createGuild, findGuildById, findGuildByGuildId,
+	User, ITrack, updateUserById, createUser, findUserByUserId, findUserById} from './../models';
 
 const wait = promisify(setTimeout);
 
 class Playlist {
 	public readonly guildId: string;
+	public readonly guildDbId: string;
 	public readonly userId: string;
-
+	public readonly userName: string;
     public childProcess: cp.ChildProcess;
 	public playerState: AudioPlayerStatus;
 	public queue: Track[];
 	public queueLock = false;
 
     public constructor(
+		guildDbId: string,
 		guildId: string,
-		userId: string) {
+		userId: string,
+		userName: string) {
 		this.queue = [];
+		this.guildDbId = guildDbId;
 		this.guildId = guildId;
 		this.userId = userId;
+		this.userName = userName;
 		this.childProcess = null;
 		this.playerState = null;
     }
@@ -43,14 +51,68 @@ class Playlist {
 	 *
 	 * @param track The track to add to the queue
 	 */
-	public enqueue(track: Track) {
-		this.queue.push(track);
+	public enqueue(_track: Track) {
+		this.queue.push(_track);
+		this.updateUser(_track); // no need to await because we dont need the response.
 		this.processQueue();
 	}
 
+	public async updateUser(_track: Track){
+		let userData = await findUserByUserId(this.userId);
+		// <TODO> remove code duplication
+		if(userData == null){
+			let trackObj: ITrack = {
+				url: _track.url,
+				title: (_track.title) ? _track.title : "NOT_AVAILABLE",
+				provider: _track.provider
+			}
+			let userObj: User = {
+				name: this.userName,
+				userId: this.userId,
+				guild: this.guildDbId,
+				tracks: Array.of(trackObj)
+			}
+			let userPersisted = await createUser(userObj);
+			let guildData = await findGuildByGuildId(this.guildId);
+			let guildUsers = guildData.users;
+			guildUsers.push(userPersisted)
+			let guildObj: Guild = {
+				name: guildData.name,
+				guildId: guildData.guildId,
+				users: guildUsers
+			}
+			await updateGuildById(this.guildDbId, guildObj);
+		} else {
+			let trackObj: ITrack = {
+				url: _track.url,
+				title: (_track.title) ? _track.title : "NOT_AVAILABLE",
+				provider: _track.provider
+			}
+			let newTrack = userData.tracks;
+			newTrack.push(trackObj);
+			let userObj: User = {
+				name: this.userName,
+				userId: this.userId,
+				guild: this.guildDbId,
+				tracks: newTrack
+			}
+			let userPersisted = await updateUserById(userData._id, userObj);
+			let guildData = await findGuildByGuildId(this.guildId);
+			let guildUsers = guildData.users;
+			guildUsers.push(userPersisted)
+			let guildObj: Guild = {
+				name: guildData.name,
+				guildId: guildData.guildId,
+				users: guildUsers
+			}
+			await updateGuildById(this.guildDbId, guildObj);
+		}
+	}
+
 	// queue only without processing
-	public strictEnqueue(track: Track) {
-		this.queue.push(track);
+	public strictEnqueue(_track: Track) {
+		this.queue.push(_track);
+		this.updateUser(_track);
 	}
 
 	// manually start the queue processs, mainly use for playlist

@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 
-type Track = {
+type ITrack = {
     title: string;
     url: string;
     provider: string;
@@ -8,7 +8,7 @@ type Track = {
 
 // collection: `Tracks`
 // document: `Track`
-const trackSchema = new mongoose.Schema({
+const TrackSchema = new mongoose.Schema({
     title: {
         required: true,
         type: String
@@ -21,7 +21,16 @@ const trackSchema = new mongoose.Schema({
         required: true,
         type: String
     },
-},{ collection: 'Tracks', timestamps: true}); // custom collection naming)
+},{ collection: 'Tracks', timestamps: false}); // custom collection naming)
 
-export { trackSchema as TrackSchema, Track }
+
+// special 'type' only export if there is issue when running by other class than import it
+// usually when there are issue to use the item imported using ES6 import due to it async nature
+// this usually solvable by using synchronous import which is commonJS const x = require(x).
+// Beside using commonJS import, the export ordering in 'index.ts' is also worth checking, 
+// put the farthest child at highest and lowest child at bottom. farthest means its the one without
+// much import
+export type { ITrack };
+export { TrackSchema };
+
 

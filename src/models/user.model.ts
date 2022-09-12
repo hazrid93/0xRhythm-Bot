@@ -1,16 +1,16 @@
 import mongoose from 'mongoose';
-import { connectToServer, getConnection } from './../utils';
-import { TrackSchema, Track} from './';  
+import { getConnection } from './../utils';
+import {type ITrack, TrackSchema } from '.';
+
 // more about middleware for softdelete https://masteringjs.io/tutorials/mongoose/soft-delete
 // more about timestamp https://mongoosejs.com/docs/timestamps.html
 // more about mongo model with mongoose https://www.freecodecamp.org/news/introduction-to-mongoose-for-mongodb-d2a7aa593c57/
-
 
 type User = {
     name: string;
     userId: string;
     guild: string;
-    tracks: Track[];
+    tracks: ITrack[];
 }
 
 // collection: `Users`
