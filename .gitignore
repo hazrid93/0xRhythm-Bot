@@ -1,4 +1,4 @@
-node_modules/**
-.env.local
 .DS_Store
-src/DS_Store
+.DS_Store/*
+node_modules
+.env.local
