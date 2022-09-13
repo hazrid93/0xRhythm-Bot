@@ -118,8 +118,9 @@ async function execute(_url, _voiceChannel, _guild){
           if(currentVoiceConnection){
             sendMessageToGuild("Leaving the voice channel...", _guild);
             currentVoiceConnection.destroy();
+            process.exit(0);
           }
-        }, 30*1000);
+        }, 5*1000);
       } else if(newOne.status == AudioPlayerStatus.Paused){
         process.send(IPC_STATES_RESP.SONG_PAUSED);
       } else if(newOne.status == AudioPlayerStatus.Playing){
@@ -229,6 +230,14 @@ process.on('message', async (_message: string) => {
   }
 });
 
-  
+process.once('SIGTERM', (code) => {
+  console.log(`[${new Date().toISOString()}]-[${randomUUID()}]-[PID:${process.pid}] Child process received SIGTERM with code: ${code}`);
+  if(currentVoiceConnection != null) { currentVoiceConnection.destroy() };
+  process.exit(0);
+});
 
-
+process.once('SIGINT', (code) => {
+  console.log(`[${new Date().toISOString()}]-[${randomUUID()}]-[PID:${process.pid}] Child process received SIGINT with code: ${code}`);
+  if(currentVoiceConnection != null) { currentVoiceConnection.destroy() };
+  process.exit(0);
+});

@@ -44,7 +44,65 @@ class Playlist {
 		this.userName = userName;
 		this.childProcess = null;
 		this.playerState = null;
+
+		this.startProcessEventListener();
     }
+
+	public startProcessEventListener() {
+		process.once("exit", () => {
+			console.log(`[${new Date().toISOString()}]-[${randomUUID()}]-[PID:${process.pid}] Process exit signal detected.`);
+			try {
+				if(this.childProcess != null) {
+					this.childProcess.kill();
+				}
+			} catch (ex) {
+			} finally {
+				process.exit(0);
+			}
+		});
+
+		process.once("SIGTERM", () => {
+			console.log(`[${new Date().toISOString()}]-[${randomUUID()}]-[PID:${process.pid}] Process SIGTERM signal detected.`);
+			try {
+				if(this.childProcess != null) {
+					this.childProcess.kill();
+				}
+			} catch (ex) {
+			} finally {
+				process.exit(0);
+			}
+		});
+
+		process.once("SIGINT", () => {
+			console.log(`[${new Date().toISOString()}]-[${randomUUID()}]-[PID:${process.pid}] Process SIGINT signal detected.`);
+			try {
+				if(this.childProcess != null) {
+					this.childProcess.kill();
+				}
+				
+			} catch (ex) {
+			} finally {
+				process.exit(0);
+			}
+		});
+	}
+
+	public startChildEventListener() {
+		this.childProcess.on('error', (error) => {
+			console.error(`[${new Date().toISOString()}]-[${randomUUID()}]-[PID:${process.pid}] Child has an error: ${error.message}`);
+		});
+
+		this.childProcess.once('exit', (code) => {
+			console.log(`[${new Date().toISOString()}]-[${randomUUID()}]-[PID:${process.pid}] Child process exited with code: ${code}`);
+			this.childProcess = null;
+			this.stop();
+		})
+
+		this.childProcess.on('message', (_message: string) => {
+			this.commandHandler(_message);
+		})
+	}
+
 
     /**
 	 * Adds a new Track to the queue.
@@ -126,7 +184,12 @@ class Playlist {
 	public stop() {
 		this.queueLock = true;
 		this.queue = [];
-		this.sendCommand(IPC_STATES_REQ.SKIP_VOICE_CONNECTION);
+		if(this.childProcess != null) {
+			try {
+				this.childProcess.kill();
+			} catch(ex){
+			}
+		}
 	}
 
     /**
@@ -161,27 +224,7 @@ class Playlist {
 			if(this.childProcess == null){
 				const trackProcess = cp.fork(__dirname + './../player/child_player.ts', [encoded]);
 				this.childProcess = trackProcess;
-				trackProcess.on('error', (error) => {
-					console.error(`[${date}]-[${uuid}]-[PID:${this.childProcess.pid}] Child has an error: ${error.message}`);
-				});
-				
-				trackProcess.once('close', (code) => {
-					console.log(`[${date}]-[${uuid}] Child process closed with code: ${code}`);
-					this.childProcess.kill();
-					this.childProcess = null;
-					this.stop();
-				})
-
-				trackProcess.once('exit', (code) => {
-					console.log(`[${date}]-[${uuid}]-[PID:${this.childProcess.pid}] Child process exited with code: ${code}`);
-					this.childProcess.kill();
-					this.childProcess = null;
-					this.stop();
-				})
-
-				trackProcess.on('message', (_message: string) => {
-					this.commandHandler(_message);
-				})
+				this.startChildEventListener();
 			} else {
 				this.childProcess.send(encoded);
 			}
@@ -197,7 +240,7 @@ class Playlist {
 		const date = new Date().toISOString();
 		try{
 			if(_message != null && _message.length > 0) {
-				console.log(`[${date}]-[${uuid}]-[PID:${this.childProcess.pid}] Child message: ${_message}`);
+				console.log(`[${date}]-[${uuid}]-[PID:${process.pid}] Child message: ${_message}`);
 				switch(_message){
 					case IPC_STATES_RESP.SONG_IDLE:
 						this.playerState = AudioPlayerStatus.Idle;
@@ -217,17 +260,23 @@ class Playlist {
 				}
 			}
 		} catch(ex) {
-			console.error(`[${date}]-[${uuid}]-[PID:${this.childProcess.pid}] Fail to process child message: ${_message.toString()}, reason: ${ex.message}`);
+			console.error(`[${date}]-[${uuid}]-[PID:${process.pid}] Fail to process child message: ${_message.toString()}, reason: ${ex.message}`);
 		}
 	}
 
 	public sendCommand(_command: string){
-		if(this.childProcess != null){
-			this.childProcess.send(_command);
-		} else {
-			console.warn("Fail to skip the current track");
+		try{
+			if(this.childProcess != null){
+				this.childProcess.send(_command);
+			} else {
+				console.warn("Fail to skip the current track");
+			}
+		} catch(ex){
+			console.error(`[${new Date().toISOString()}]-[${randomUUID()}]-[PID:${process.pid}] Fail to send command to child process , reason: ${ex.message}`);
+			this.stop();
 		}
 	}
+	
 }
 
 export { Playlist };

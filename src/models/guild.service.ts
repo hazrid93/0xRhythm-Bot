@@ -67,7 +67,6 @@ async function findGuildByGuildId(_gid: string){
     let response = null;
     await getGuildModel(async(GuildModel: Model<any>) => {
         try {
-            console.log("gid: " + _gid);
             const mongoRes = GuildModel.findOne({guildId: _gid});
             if(!mongoRes){
                 // throw error
