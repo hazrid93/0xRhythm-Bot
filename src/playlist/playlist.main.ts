@@ -51,14 +51,7 @@ class Playlist {
 	public startProcessEventListener() {
 		process.once("exit", () => {
 			console.log(`[${new Date().toISOString()}]-[${randomUUID()}]-[PID:${process.pid}] Process exit signal detected.`);
-			try {
-				if(this.childProcess != null) {
-					this.childProcess.kill();
-				}
-			} catch (ex) {
-			} finally {
-				process.exit(0);
-			}
+			this.stop();
 		});
 
 		process.once("SIGTERM", () => {
@@ -182,12 +175,15 @@ class Playlist {
 	 * Stops audio playback and empties the queue
 	 */
 	public stop() {
-		this.queueLock = true;
+		this.queueLock = false;
 		this.queue = [];
 		if(this.childProcess != null) {
 			try {
 				this.childProcess.kill();
 			} catch(ex){
+				console.log(`Fail to kill childprocess , reason: ${ex.message}`);
+			} finally {
+				this.childProcess = null;
 			}
 		}
 	}
