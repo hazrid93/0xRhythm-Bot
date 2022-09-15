@@ -19,6 +19,7 @@ import playdl, { YouTubePlayList, YouTubeVideo } from 'play-dl';
 import { Track } from './track'
 import { Playlist } from './playlist';
 import { Guild, createGuild, findGuildById, findGuildByGuildId } from './models';
+import { randomUUID } from "crypto";
 const wait = promisify(setTimeout);
 
 const { Client, GatewayIntentBits, PermissionFlagsBits, 
@@ -95,6 +96,7 @@ client.on('interactionCreate', async (interaction: Interaction)=> {
     }
 
     if (interaction.commandName === 'play') {
+        let _uuid = randomUUID();
         // Extract the video URL from the command
         const url = interaction.options.get('link')!.value as string;
         await interaction.deferReply();
@@ -119,6 +121,9 @@ client.on('interactionCreate', async (interaction: Interaction)=> {
                 if(trackType === 'video'){
                     // Attempt to create a Track from the user's video URL
                     const track = new Track(url, SongProvider.YOUTUBE);
+                    // get audio info
+                    await track.getAudioInfo();
+                    console.log(`[${new Date().toISOString()}]-[${_uuid}]-[PID:${process.pid}] Track added to guildId: ${guildId}, track info: ${JSON.stringify(track)}`);
                     // Enqueue the track and reply a success message to the user
                     subscription.enqueue(track);
                     await interaction.followUp(`Track added to queue`);

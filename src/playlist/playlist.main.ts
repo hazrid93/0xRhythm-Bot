@@ -1,18 +1,8 @@
 import {
-	AudioPlayer,
 	AudioPlayerStatus,
-	AudioResource,
-	createAudioPlayer,
-	entersState,
-	VoiceConnection,
-	VoiceConnectionDisconnectReason,
-	VoiceConnectionStatus,
-    NoSubscriberBehavior
 } from '@discordjs/voice';
 import { removeSubscription } from "./../app";
 import { randomUUID } from 'crypto'
-import USER_CONFIG from './../constants/userConfig';
-import cp from "child_process";
 import { Worker, workerData } from 'worker_threads';
 import { promisify } from 'util';
 import { Track } from '../track' ;
@@ -75,7 +65,6 @@ class Playlist {
 				if(this.childProcess != null) {
 					await this.childProcess.terminate();
 				}
-				
 			} catch (ex) {
 			} finally {
 				process.exit(0);
@@ -146,7 +135,6 @@ class Playlist {
 			// Remove old item from track array and add new one to the last.
 			// keep track array at specific length
 			if(newTrack.length >= USER_CONFIGS.TRACK_LIMIT){
-				console.log("track length: " + newTrack.length)
 				newTrack.shift();
 			}
 			newTrack.push(trackObj);

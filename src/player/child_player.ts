@@ -76,6 +76,11 @@ function sendMessageToGuild(_message: string, _guild: Guild){
   }
 }
 
+function exit(){
+  currentVoiceConnection.destroy();
+  process.exit(0);
+}
+
 async function execute(_url, _voiceChannel, _guild){
     //voice related
     const voiceConnection: VoiceConnection = joinVoiceChannel({
@@ -118,8 +123,7 @@ async function execute(_url, _voiceChannel, _guild){
         timeoutId = setTimeout(()=> {
           if(currentVoiceConnection){
             sendMessageToGuild("Leaving the voice channel...", _guild);
-            currentVoiceConnection.destroy();
-            process.exit(0);
+            exit();
           }
         }, 60*1000);
       } else if(newOne.status == AudioPlayerStatus.Paused){
@@ -145,8 +149,8 @@ async function execute(_url, _voiceChannel, _guild){
           await entersState(voiceConnection, VoiceConnectionStatus.Connecting, 5_000);
           // Probably moved voice channel
         } catch {
-          voiceConnection.destroy();
           parentPort.postMessage(IPC_STATES_RESP.REMOVE_GUILD_SUBSCRIPTION);
+          exit();
           // Probably removed from voice channel
         }
       } else if (voiceConnection.rejoinAttempts < 5) {
@@ -159,8 +163,8 @@ async function execute(_url, _voiceChannel, _guild){
         /*
           The disconnect in this case may be recoverable, but we have no more remaining attempts - destroy.
         */
-        voiceConnection.destroy();
         parentPort.postMessage(IPC_STATES_RESP.REMOVE_GUILD_SUBSCRIPTION);
+        exit();
       }
     } else if (
       !readyLock &&
@@ -176,8 +180,8 @@ async function execute(_url, _voiceChannel, _guild){
         await entersState(voiceConnection, VoiceConnectionStatus.Ready, 20_000);
       } catch {
         if (voiceConnection.state.status !== VoiceConnectionStatus.Destroyed) {
-          voiceConnection.destroy();
           parentPort.postMessage(IPC_STATES_RESP.REMOVE_GUILD_SUBSCRIPTION);
+          exit();
         }
       } finally {
         readyLock = false;
@@ -208,8 +212,8 @@ parentPort.on('message', async (_message: string) => {
           parentPort.postMessage(IPC_STATES_RESP.SONG_RESUMED);
           break;  
         case IPC_STATES_REQ.LEAVE_VOICE_CONNECTION:
-          currentVoiceConnection.destroy();
           parentPort.postMessage(IPC_STATES_RESP.VOICE_CONNECTION_LEAVED);
+          exit();
           break;  
         default:
           const decoded = JSON.parse(

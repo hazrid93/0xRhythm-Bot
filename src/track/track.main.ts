@@ -11,8 +11,6 @@ class Track implements TrackData {
     constructor(url, provider) {
         this.url = url;
         this.provider = provider;
-        // update track title
-        this.getAudioInfo(this.url, this.provider);
     }
 
     /**
@@ -33,11 +31,12 @@ class Track implements TrackData {
 		});
 	}
 
-    private async getAudioInfo(_url: string, _provider: SongProvider) {
-        switch(_provider) {
+    public async getAudioInfo() {
+        switch(this.provider) {
             case SongProvider.YOUTUBE:
-                const trackTitle = await this.fetchYoutubeUrlInfo(_url);
+                const trackTitle = await this.fetchYoutubeUrlInfo(this.url);
                 this.title = trackTitle;
+                return trackTitle;
                 break;
             case SongProvider.SOUNDCLOUD:
                 break;
