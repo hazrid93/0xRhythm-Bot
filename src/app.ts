@@ -1,150 +1,199 @@
-import * as fs from 'fs';
-import { requireFile, projectDir, writeJson } from 'discord-bot-quickstart';
-import { config as dotenv } from 'dotenv';
-import { MikroORM, IDatabaseDriver, Connection } from '@mikro-orm/core';
-import { EntityManager } from '@mikro-orm/sqlite';
+const pidusage = require('pidusage');
+import {SongProvider } from "./track";
+import { IPC_STATES_RESP, IPC_STATES_REQ } from './constants/ipcStates';
+import {
+    VoiceConnectionStatus, 
+    AudioPlayerStatus, 
+    AudioResource,
+    generateDependencyReport,
+    createAudioPlayer,
+    createAudioResource,
+    entersState,
+    joinVoiceChannel,
+    NoSubscriberBehavior
+} from '@discordjs/voice';
+import Discord, { Interaction, GuildMember, Snowflake } from 'discord.js';
+import { connectToServer, getConnection } from './utils/mongodbutils';
+import { promisify } from 'util';
+import playdl, { YouTubePlayList, YouTubeVideo } from 'play-dl';
+import { Track } from './track'
+import { Playlist } from './playlist';
+import { Guild, createGuild, findGuildById, findGuildByGuildId } from './models';
+const wait = promisify(setTimeout);
 
-import { IRhythmBotConfig, RhythmBot } from './bot';
-import { Playlist } from './media/playlist.model';
-import { MediaItem } from './media/media-item.model';
+const { Client, GatewayIntentBits, PermissionFlagsBits, 
+    ActionRowBuilder, ButtonBuilder, ButtonStyle,
+    EmbedBuilder, SelectMenuBuilder, BaseInteraction } = Discord;
+const clientToken = process.env.STAGING_TOKEN;
 
-dotenv();
+const client = new Client({ 
+    intents: [GatewayIntentBits.Guilds, 
+        GatewayIntentBits.GuildMessageReactions, 
+        GatewayIntentBits.GuildVoiceStates,
+        GatewayIntentBits.DirectMessages,
+        GatewayIntentBits.GuildMessages] 
+});
 
-export let ORM: MikroORM<IDatabaseDriver<Connection>>;
+/**
+ * Maps guild IDs (Snowflake is guildId in discord special UUID format) to playlist, which exist if the bot has an active VoiceConnection to the guild.
+ */
+ const subscriptions = new Map<Snowflake, Playlist>();
 
-(async () => {
-    try {
-        let config: IRhythmBotConfig;
-
-        if (process.env.DISCORD_TOKEN == null) {
-            const configPath = projectDir('../bot-config.json');
-            if (!fs.existsSync(configPath)) {
-                await writeJson({ discord: { token: '<BOT-TOKEN>' } }, configPath);
-            }
-            config = requireFile(configPath);
-        } else {
-            config = readConfigFromEnv();
-        }
-
-        ORM = await MikroORM.init({
-            type: 'sqlite',
-            dbName: 'data/rhythm.db',
-            entities: [Playlist]
-        });
-        const migrator = ORM.getMigrator();
-        migrator.createMigration();
-        await migrator.up();
-
-        const bot = new RhythmBot(config);
-
-        if (!!config && config.discord.token === '<BOT-TOKEN>') {
-            bot.logger.debug('Invalid Token - Create valid token in the Discord Developer Portal');
-            console.log('Invalid Token - Create valid token in the Discord Developer Portal');
-            process.exit(0);
-        }
-
-        bot.connect().then(() => {
-            bot.logger.debug('Rhythm Bot Online');
-            bot.listen();
-        });
-    } catch (error) {
-        console.error(error);
-    }
-})();
-
-function readConfigFromEnv(): IRhythmBotConfig {
-    const config: IRhythmBotConfig = {} as any;
-
-    if (process.env.COMMAND_SYMBOL != null) {
-        config.command = config.command ?? ({} as any);
-        config.command.symbol = process.env.COMMAND_SYMBOL;
-    }
-
-    if (process.env.DISCORD_TOKEN != null) {
-        config.discord = config.discord ?? ({} as any);
-        config.discord.token = process.env.DISCORD_TOKEN;
-    }
-    if (process.env.DISCORD_LOG != null) {
-        config.discord = config.discord ?? ({} as any);
-        config.discord.log = /true/i.test(process.env.DISCORD_LOG);
-    }
-
-    if (process.env.DIRECTORY_PLUGINS != null) {
-        config.directory = config.directory ?? ({} as any);
-        config.directory.plugins = process.env.DIRECTORY_PLUGINS;
-    }
-    if (process.env.DIRECTORY_LOGS != null) {
-        config.directory = config.directory ?? ({} as any);
-        config.directory.logs = process.env.DIRECTORY_LOGS;
-    }
-
-    if (process.env.AUTO_DEAFEN != null) {
-        config.auto = config.auto ?? ({} as any);
-        config.auto.deafen = /true/i.test(process.env.AUTO_DEAFEN);
-    }
-    if (process.env.AUTO_PAUSE != null) {
-        config.auto = config.auto ?? ({} as any);
-        config.auto.pause = /true/i.test(process.env.AUTO_PAUSE);
-    }
-    if (process.env.AUTO_PLAY != null) {
-        config.auto = config.auto ?? ({} as any);
-        config.auto.play = /true/i.test(process.env.AUTO_PLAY);
-    }
-    if (process.env.AUTO_RECONNECT != null) {
-        config.auto = config.auto ?? ({} as any);
-        config.auto.reconnect = /true/i.test(process.env.AUTO_RECONNECT);
-    }
-
-    if (process.env.QUEUE_ANNOUNCE != null) {
-        config.queue = config.queue ?? ({} as any);
-        config.queue.announce = /true/i.test(process.env.QUEUE_ANNOUNCE);
-    }
-    if (process.env.QUEUE_REPEAT != null) {
-        config.queue = config.queue ?? ({} as any);
-        config.queue.repeat = /true/i.test(process.env.QUEUE_REPEAT);
-    }
-
-    if (process.env.STREAM_SEEK != null) {
-        config.stream = config.stream ?? ({} as any);
-        config.stream.seek = parseFloat(process.env.STREAM_SEEK);
-    }
-    if (process.env.STREAM_PACKET_LOSS_PERCENTAGE != null) {
-        config.stream = config.stream ?? ({} as any);
-        config.stream.packetLossPercentage = parseFloat(process.env.STREAM_PACKET_LOSS_PERCENTAGE);
-    }
-    if (process.env.STREAM_FORWARD_ERROR_CORRECTION != null) {
-        config.stream = config.stream ?? ({} as any);
-        config.stream.forwardErrorCorrection = /true/i.test(process.env.STREAM_FORWARD_ERROR_CORRECTION);
-    }
-    if (process.env.STREAM_VOLUME != null) {
-        config.stream = config.stream ?? ({} as any);
-        config.stream.volume = parseFloat(process.env.STREAM_VOLUME);
-    }
-    if (process.env.STREAM_BITRATE != null) {
-        config.stream = config.stream ?? ({} as any);
-        config.stream.bitrate = parseFloat(process.env.STREAM_BITRATE);
-    }
-
-    if (process.env.EMOJIS_ADD_SONG != null) {
-        config.emojis = config.emojis ?? ({} as any);
-        config.emojis.addSong = process.env.EMOJIS_ADD_SONG;
-    }
-    if (process.env.EMOJIS_STOP_SONG != null) {
-        config.emojis = config.emojis ?? ({} as any);
-        config.emojis.stopSong = process.env.EMOJIS_STOP_SONG;
-    }
-    if (process.env.EMOJIS_PLAY_SONG != null) {
-        config.emojis = config.emojis ?? ({} as any);
-        config.emojis.playSong = process.env.EMOJIS_PLAY_SONG;
-    }
-    if (process.env.EMOJIS_PAUSE_SONG != null) {
-        config.emojis = config.emojis ?? ({} as any);
-        config.emojis.pauseSong = process.env.EMOJIS_PAUSE_SONG;
-    }
-    if (process.env.EMOJIS_SKIP_SONG != null) {
-        config.emojis = config.emojis ?? ({} as any);
-        config.emojis.skipSong = process.env.EMOJIS_SKIP_SONG;
-    }
-
-    return config;
+function removeSubscription(_subscription: Snowflake, _uuid: string){
+    subscriptions.delete(_subscription);
+    console.log(`[${new Date().toISOString()}]-[${_uuid}]-[PID:${process.pid}] Removed guild subscription with id: ${_subscription}`);
 }
+
+connectToServer(function(err) {
+    if(err != null && err.length == 0) {
+        console.log(`[${new Date().toISOString()}]-[PID:${process.pid}] Fail to connect to mongodb instance`);
+        process.exit(1);
+    } else {
+        execute();
+    }
+});
+
+function execute(){
+
+client.login(clientToken);
+client.on('error', console.warn);
+client.on('ready', () => {
+    console.log('Main client ready, PID: ' +  process.pid);
+});
+
+ // to be called by playlist when child process detect its disconnected
+function removeSubscription(_subscription: Snowflake, _uuid: string){
+    subscriptions.delete(_subscription);
+    console.log(`[${new Date().toISOString()}]-[${_uuid}]-[PID:${process.pid}] Removed guild subscription with id: ${_subscription}`);
+}
+
+client.on('interactionCreate', async (interaction: Interaction)=> {
+    if (!interaction.isChatInputCommand()){
+        return;
+    }
+    if(!interaction.guildId){
+        return;
+    }
+    
+    let guildId = interaction.guildId;
+    let subscription = subscriptions.get(guildId);
+    let userId = interaction.member.user.id;
+    let userName = interaction.member.user.username;
+    
+    // save guild information if haven't
+    let guildData = await findGuildByGuildId(guildId);
+    let guildDbId = null;
+    if(guildData == null){
+        let guildObj: Guild = {
+            name: interaction.guild.name,
+            guildId: interaction.guildId
+        }
+        let guildPersisted = await createGuild(guildObj);
+        guildDbId = guildPersisted._id;
+    } else {
+        guildDbId = guildData._id;
+    }
+
+    if (interaction.commandName === 'play') {
+        // Extract the video URL from the command
+        const url = interaction.options.get('link')!.value as string;
+        await interaction.deferReply();
+        // If a connection to the guild doesn't already exist and the user is in a voice channel, join that channel
+        // and create a subscription.
+        if (!subscription) {
+            if (interaction.member instanceof GuildMember && interaction.member.voice.channel) {
+                const channel = interaction.member.voice.channel;
+                subscription = new Playlist(guildDbId, guildId, userId, userName);
+                subscriptions.set(interaction.guildId, subscription);
+            }
+        }
+        // If there is no subscription, tell the user they need to join a channel.
+        if (!subscription) {
+            await interaction.followUp('Join a voice channel and then try that again!');
+            return;
+        }
+        try {
+            if(interaction.options.getSubcommand() === 'youtube_url'){
+                let trackType = playdl.yt_validate(url);
+                // validate the track url
+                if(trackType === 'video'){
+                    // Attempt to create a Track from the user's video URL
+                    const track = new Track(url, SongProvider.YOUTUBE);
+                    // Enqueue the track and reply a success message to the user
+                    subscription.enqueue(track);
+                    await interaction.followUp(`Track added to queue`);
+                } else if(trackType === 'playlist'){
+                    // get youtube playlist, skip hidden videos
+                    const playlist: YouTubePlayList = await playdl.playlist_info(url, { incomplete : true })
+                    const videos: YouTubeVideo[] = await playlist.all_videos();
+                    videos.forEach(_video =>{
+                        const track = new Track(_video.url, SongProvider.YOUTUBE);
+                        subscription.strictEnqueue(track);
+                    });
+                    subscription.startProcessQueue()
+                    await interaction.followUp(`Playlist added to queue`);
+                } else {
+                    await interaction.followUp(`Track format is not supported!`);
+                }
+            }
+        } catch (error) {
+            console.warn(error);
+            await interaction.reply('Failed to play track, please try again later!');
+        }
+    } else if (interaction.commandName === 'skip') {
+		if (subscription) {
+			// Calling .stop() on an AudioPlayer causes it to transition into the Idle state. Because of a state transition
+			// listener defined in music/subscription.ts, transitions into the Idle state mean the next track from the queue
+			// will be loaded and played.
+			subscription.sendCommand(IPC_STATES_REQ.SKIP_VOICE_CONNECTION);
+			await interaction.reply('Skipped song!');
+		} else {
+			await interaction.reply('Not playing in this server!');
+		}
+	} else if (interaction.commandName === 'queue') {
+		// Print out the current queue, including up to the next 5 tracks to be played.
+		if (subscription) {
+            if(subscription.playerState === AudioPlayerStatus.Idle && subscription.queue.length == 0){
+                await interaction.reply('Nothing is currently playing');
+                return;
+            } else {
+                const queue =  subscription.queue
+                .slice(0,5)
+                .map((data, index) => {
+                    return `${index+1} - [${data.title}] - ${data.url}`;
+                }).join('\n');
+                await interaction.reply(queue? queue : "No item are queued");
+            }
+		} else {
+			await interaction.reply('Not playing in this server!');
+		}
+	} else if (interaction.commandName === 'pause') {
+		if (subscription) {
+			subscription.sendCommand(IPC_STATES_REQ.PAUSE_VOICE_CONNECTION);
+			await interaction.reply({ content: `Paused!`, ephemeral: false });
+		} else {
+			await interaction.reply('Not playing in this server!');
+		}
+	} else if (interaction.commandName === 'resume') {
+		if (subscription) {
+			subscription.sendCommand(IPC_STATES_REQ.RESUME_VOICE_CONNECTION);
+			await interaction.reply({ content: `Unpaused!`, ephemeral: false });
+		} else {
+			await interaction.reply('Not playing in this server!');
+		}
+	} else if (interaction.commandName === 'leave') {
+		if (subscription) {
+            subscription.sendCommand(IPC_STATES_REQ.LEAVE_VOICE_CONNECTION);
+			subscriptions.delete(interaction.guildId);
+			await interaction.reply({ content: `Left channel!`, ephemeral: false });
+		} else {
+			await interaction.reply('Not playing in this server!');
+		}
+	} else {
+		await interaction.reply('Unknown command');
+	}
+});
+};
+
+export { removeSubscription };
+
