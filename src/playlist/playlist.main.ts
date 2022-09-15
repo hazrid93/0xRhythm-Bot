@@ -11,6 +11,7 @@ import {
 } from '@discordjs/voice';
 import { removeSubscription } from "./../app";
 import { randomUUID } from 'crypto'
+import USER_CONFIG from './../constants/userConfig';
 import cp from "child_process";
 import { promisify } from 'util';
 import { Track } from '../track' ;
@@ -19,6 +20,7 @@ import { ForkObject } from './../player';
 import { 
 	Guild, updateGuildById, createGuild, findGuildById, findGuildByGuildId,
 	User, ITrack, updateUserById, createUser, findUserByUserId, findUserById} from './../models';
+import USER_CONFIGS from './../constants/userConfig';
 
 const wait = promisify(setTimeout);
 
@@ -114,7 +116,7 @@ class Playlist {
 		if(userData == null){
 			let trackObj: ITrack = {
 				url: _track.url,
-				title: (_track.title) ? _track.title : "NOT_AVAILABLE",
+				title: (_track.title != null) ? _track.title : "NOT_AVAILABLE",
 				provider: _track.provider
 			}
 			let userObj: User = {
@@ -136,10 +138,16 @@ class Playlist {
 		} else {
 			let trackObj: ITrack = {
 				url: _track.url,
-				title: (_track.title) ? _track.title : "NOT_AVAILABLE",
+				title: (_track.title != null) ? _track.title : "NOT_AVAILABLE",
 				provider: _track.provider
 			}
 			let newTrack = userData.tracks;
+			// Remove old item from track array and add new one to the last.
+			// keep track array at specific length
+			if(newTrack.length >= USER_CONFIGS.TRACK_LIMIT){
+				console.log("track length: " + newTrack.length)
+				newTrack.shift();
+			}
 			newTrack.push(trackObj);
 			let userObj: User = {
 				name: this.userName,
