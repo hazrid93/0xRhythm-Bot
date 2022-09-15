@@ -13,17 +13,19 @@ import {
     NoSubscriberBehavior
 } from '@discordjs/voice';
 import Discord, { Interaction, GuildMember, Snowflake } from 'discord.js';
+import { connectToServer, getConnection } from './utils/mongodbutils';
 import { promisify } from 'util';
 import playdl, { YouTubePlayList, YouTubeVideo } from 'play-dl';
 import { Track } from './track'
 import { Playlist } from './playlist';
-
+import { Guild, createGuild, findGuildById, findGuildByGuildId } from './models';
 const wait = promisify(setTimeout);
 
 const { Client, GatewayIntentBits, PermissionFlagsBits, 
     ActionRowBuilder, ButtonBuilder, ButtonStyle,
     EmbedBuilder, SelectMenuBuilder, BaseInteraction } = Discord;
 const clientToken = process.env.STAGING_TOKEN;
+
 const client = new Client({ 
     intents: [GatewayIntentBits.Guilds, 
         GatewayIntentBits.GuildMessageReactions, 
@@ -31,16 +33,33 @@ const client = new Client({
         GatewayIntentBits.DirectMessages,
         GatewayIntentBits.GuildMessages] 
 });
-client.login(clientToken);
-client.on('error', console.warn);
-client.on('ready', () => {
-    console.log('Main client ready, PID: ' +  process.pid);
-});
 
 /**
  * Maps guild IDs (Snowflake is guildId in discord special UUID format) to playlist, which exist if the bot has an active VoiceConnection to the guild.
  */
  const subscriptions = new Map<Snowflake, Playlist>();
+
+function removeSubscription(_subscription: Snowflake, _uuid: string){
+    subscriptions.delete(_subscription);
+    console.log(`[${new Date().toISOString()}]-[${_uuid}]-[PID:${process.pid}] Removed guild subscription with id: ${_subscription}`);
+}
+
+connectToServer(function(err) {
+    if(err != null && err.length == 0) {
+        console.log(`[${new Date().toISOString()}]-[PID:${process.pid}] Fail to connect to mongodb instance`);
+        process.exit(1);
+    } else {
+        execute();
+    }
+});
+
+function execute(){
+
+client.login(clientToken);
+client.on('error', console.warn);
+client.on('ready', () => {
+    console.log('Main client ready, PID: ' +  process.pid);
+});
 
  // to be called by playlist when child process detect its disconnected
 function removeSubscription(_subscription: Snowflake, _uuid: string){
@@ -59,8 +78,23 @@ client.on('interactionCreate', async (interaction: Interaction)=> {
     let guildId = interaction.guildId;
     let subscription = subscriptions.get(guildId);
     let userId = interaction.member.user.id;
+    let userName = interaction.member.user.username;
+    
+    // save guild information if haven't
+    let guildData = await findGuildByGuildId(guildId);
+    let guildDbId = null;
+    if(guildData == null){
+        let guildObj: Guild = {
+            name: interaction.guild.name,
+            guildId: interaction.guildId
+        }
+        let guildPersisted = await createGuild(guildObj);
+        guildDbId = guildPersisted._id;
+    } else {
+        guildDbId = guildData._id;
+    }
+
     if (interaction.commandName === 'play') {
-        
         // Extract the video URL from the command
         const url = interaction.options.get('link')!.value as string;
         await interaction.deferReply();
@@ -69,17 +103,15 @@ client.on('interactionCreate', async (interaction: Interaction)=> {
         if (!subscription) {
             if (interaction.member instanceof GuildMember && interaction.member.voice.channel) {
                 const channel = interaction.member.voice.channel;
-                subscription = new Playlist(guildId, userId);
+                subscription = new Playlist(guildDbId, guildId, userId, userName);
                 subscriptions.set(interaction.guildId, subscription);
             }
         }
-
         // If there is no subscription, tell the user they need to join a channel.
         if (!subscription) {
             await interaction.followUp('Join a voice channel and then try that again!');
             return;
         }
-
         try {
             if(interaction.options.getSubcommand() === 'youtube_url'){
                 let trackType = playdl.yt_validate(url);
@@ -108,7 +140,6 @@ client.on('interactionCreate', async (interaction: Interaction)=> {
             console.warn(error);
             await interaction.reply('Failed to play track, please try again later!');
         }
-        
     } else if (interaction.commandName === 'skip') {
 		if (subscription) {
 			// Calling .stop() on an AudioPlayer causes it to transition into the Idle state. Because of a state transition
@@ -162,5 +193,7 @@ client.on('interactionCreate', async (interaction: Interaction)=> {
 		await interaction.reply('Unknown command');
 	}
 });
+};
 
 export { removeSubscription };
+

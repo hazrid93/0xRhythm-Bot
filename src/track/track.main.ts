@@ -48,14 +48,15 @@ class Track implements TrackData {
 
     private async fetchYoutubeUrlInfo(_url: string){
         const uuid = randomUUID();
-        let title;;
+        let title;
         try {
             let yt_info: InfoData = await playdl.video_basic_info(_url, { htmldata : false });
-            title =  (yt_info?.video_details?.title) ? yt_info?.video_details?.title : 'NOT_AVAILABLE';
-            return (title) ? title : 'NOT_AVAILABLE';
+            title = yt_info.video_details.title;
+            return title
         } catch (ex) {
             console.error(`[${new Date().toISOString()}]-[${uuid}]-[PID:${process.pid}] Fail to fetch youtube video information, reason: ${ex.message}`);
         }
+        return 'NOT_AVAILABLE';
     }
 
     public getTrackInfo(){
