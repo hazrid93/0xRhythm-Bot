@@ -113,14 +113,14 @@ async function execute(_url, _voiceChannel, _guild){
     player.addListener("stateChange", (_, newOne) => {
       if (newOne.status == AudioPlayerStatus.Idle) {
         process.send(IPC_STATES_RESP.SONG_IDLE);
-        // set timeout to disconnect in 30 second of idling
+        // set timeout to disconnect in 60 second of idling
         timeoutId = setTimeout(()=> {
           if(currentVoiceConnection){
             sendMessageToGuild("Leaving the voice channel...", _guild);
             currentVoiceConnection.destroy();
             process.exit(0);
           }
-        }, 5*1000);
+        }, 60*1000);
       } else if(newOne.status == AudioPlayerStatus.Paused){
         process.send(IPC_STATES_RESP.SONG_PAUSED);
       } else if(newOne.status == AudioPlayerStatus.Playing){
