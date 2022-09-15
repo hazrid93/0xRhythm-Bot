@@ -1,6 +1,5 @@
 # 0xRhythm-Bot
 
-
 ## Staging information
 - staging bot name: staging-umaru-rythm
 - inv url [link](https://discord.com/api/oauth2/authorize?client_id=937640440428118037&permissions=139623607104&scope=bot)
