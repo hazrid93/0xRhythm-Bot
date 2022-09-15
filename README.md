@@ -13,7 +13,7 @@ Simple little music bot to queue up and play youtube audio over discord voice ch
 ## Bot Commands
 
 -   Show some helpful info
-    > `!help`
+    > <To be updated>
 
 ### Running the Application
 -   Run `npm start`
