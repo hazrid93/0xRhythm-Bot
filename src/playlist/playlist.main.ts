@@ -13,6 +13,7 @@ import { removeSubscription } from "./../app";
 import { randomUUID } from 'crypto'
 import USER_CONFIG from './../constants/userConfig';
 import cp from "child_process";
+import { Worker, workerData } from 'worker_threads';
 import { promisify } from 'util';
 import { Track } from '../track' ;
 import { IPC_STATES_REQ, IPC_STATES_RESP } from './../constants/ipcStates';
@@ -29,7 +30,7 @@ class Playlist {
 	public readonly guildDbId: string;
 	public readonly userId: string;
 	public readonly userName: string;
-    public childProcess: cp.ChildProcess;
+    public childProcess: Worker;
 	public playerState: AudioPlayerStatus;
 	public queue: Track[];
 	public queueLock = false;
@@ -56,11 +57,11 @@ class Playlist {
 			this.stop();
 		});
 
-		process.once("SIGTERM", () => {
+		process.once("SIGTERM", async () => {
 			console.log(`[${new Date().toISOString()}]-[${randomUUID()}]-[PID:${process.pid}] Process SIGTERM signal detected.`);
 			try {
 				if(this.childProcess != null) {
-					this.childProcess.kill();
+					await this.childProcess.terminate();
 				}
 			} catch (ex) {
 			} finally {
@@ -68,11 +69,11 @@ class Playlist {
 			}
 		});
 
-		process.once("SIGINT", () => {
+		process.once("SIGINT", async () => {
 			console.log(`[${new Date().toISOString()}]-[${randomUUID()}]-[PID:${process.pid}] Process SIGINT signal detected.`);
 			try {
 				if(this.childProcess != null) {
-					this.childProcess.kill();
+					await this.childProcess.terminate();
 				}
 				
 			} catch (ex) {
@@ -182,12 +183,12 @@ class Playlist {
     /**
 	 * Stops audio playback and empties the queue
 	 */
-	public stop() {
+	public async stop() {
 		this.queueLock = false;
 		this.queue = [];
 		if(this.childProcess != null) {
 			try {
-				this.childProcess.kill();
+				await this.childProcess.terminate();
 			} catch(ex){
 				console.log(`Fail to kill childprocess , reason: ${ex.message}`);
 			} finally {
@@ -226,11 +227,12 @@ class Playlist {
 		try {
 			const encoded = Buffer.from(JSON.stringify(forkObj),'utf-8').toString('base64');
 			if(this.childProcess == null){
-				const trackProcess = cp.fork(__dirname + './../player/child_player.ts', [encoded]);
+			//	const trackProcess = cp.fork(__dirname + './../player/child_player.ts', [encoded]);
+				const trackProcess = new Worker(__dirname + './../player/child_player.ts',{ workerData: {data: encoded }});
 				this.childProcess = trackProcess;
 				this.startChildEventListener();
 			} else {
-				this.childProcess.send(encoded);
+				this.childProcess.postMessage(encoded);
 			}
 			this.queueLock = false;
 		} catch (error) {
@@ -271,7 +273,7 @@ class Playlist {
 	public sendCommand(_command: string){
 		try{
 			if(this.childProcess != null){
-				this.childProcess.send(_command);
+				this.childProcess.postMessage(_command);
 			} else {
 				console.warn("Fail to skip the current track");
 			}

@@ -1,6 +1,7 @@
 const pidusage = require('pidusage');
 import { SongProvider } from "./../track"
 import { IPC_STATES_RESP, IPC_STATES_REQ } from './../constants/ipcStates';
+import { Worker, workerData, parentPort } from 'worker_threads';
 import {
 	VoiceConnection,
 	VoiceConnectionDisconnectReason,
@@ -14,7 +15,6 @@ import {
   entersState,
   joinVoiceChannel
 } from '@discordjs/voice';
-const cp = require("child_process");
 import Discord, { Guild, Interaction, GuildMember, Snowflake, Channel, TextChannel, GuildBasedChannel, VoiceBasedChannel } from 'discord.js';
 import { promisify } from 'util';
 import playdl from 'play-dl';
@@ -50,7 +50,8 @@ client.login(clientToken);
 client.on('error', console.warn);
 client.on('ready', async () => {
   console.log('Child player client ready, PID: ' + process.pid);
-  const data = process.argv[2];
+  const data = workerData.data;
+  console.log(`[${new Date().toISOString()}]-[${randomUUID()}]-[PID:${process.pid}] Worker thread creation requested by main thread, message content: ${data}`);
   const decoded = JSON.parse(
     Buffer.from(data, 'base64').toString('utf-8')
   );
@@ -112,7 +113,7 @@ async function execute(_url, _voiceChannel, _guild){
     player.play(resource);
     player.addListener("stateChange", (_, newOne) => {
       if (newOne.status == AudioPlayerStatus.Idle) {
-        process.send(IPC_STATES_RESP.SONG_IDLE);
+        parentPort.postMessage(IPC_STATES_RESP.SONG_IDLE);
         // set timeout to disconnect in 60 second of idling
         timeoutId = setTimeout(()=> {
           if(currentVoiceConnection){
@@ -122,9 +123,9 @@ async function execute(_url, _voiceChannel, _guild){
           }
         }, 60*1000);
       } else if(newOne.status == AudioPlayerStatus.Paused){
-        process.send(IPC_STATES_RESP.SONG_PAUSED);
+        parentPort.postMessage(IPC_STATES_RESP.SONG_PAUSED);
       } else if(newOne.status == AudioPlayerStatus.Playing){
-        process.send(IPC_STATES_RESP.SONG_PLAYING);
+        parentPort.postMessage(IPC_STATES_RESP.SONG_PLAYING);
         clearTimeout(timeoutId);
         timeoutId = null;
       }
@@ -145,7 +146,7 @@ async function execute(_url, _voiceChannel, _guild){
           // Probably moved voice channel
         } catch {
           voiceConnection.destroy();
-          process.send(IPC_STATES_RESP.REMOVE_GUILD_SUBSCRIPTION);
+          parentPort.postMessage(IPC_STATES_RESP.REMOVE_GUILD_SUBSCRIPTION);
           // Probably removed from voice channel
         }
       } else if (voiceConnection.rejoinAttempts < 5) {
@@ -159,7 +160,7 @@ async function execute(_url, _voiceChannel, _guild){
           The disconnect in this case may be recoverable, but we have no more remaining attempts - destroy.
         */
         voiceConnection.destroy();
-        process.send(IPC_STATES_RESP.REMOVE_GUILD_SUBSCRIPTION);
+        parentPort.postMessage(IPC_STATES_RESP.REMOVE_GUILD_SUBSCRIPTION);
       }
     } else if (
       !readyLock &&
@@ -176,7 +177,7 @@ async function execute(_url, _voiceChannel, _guild){
       } catch {
         if (voiceConnection.state.status !== VoiceConnectionStatus.Destroyed) {
           voiceConnection.destroy();
-          process.send(IPC_STATES_RESP.REMOVE_GUILD_SUBSCRIPTION);
+          parentPort.postMessage(IPC_STATES_RESP.REMOVE_GUILD_SUBSCRIPTION);
         }
       } finally {
         readyLock = false;
@@ -186,9 +187,9 @@ async function execute(_url, _voiceChannel, _guild){
   voiceConnection.subscribe(player);
 }
 
-
 // for existing voice connection
-process.on('message', async (_message: string) => {
+parentPort.on('message', async (_message: string) => {
+  console.log(`[${new Date().toISOString()}]-[${randomUUID()}]-[PID:${process.pid}] Receive message from main thread, content: ${_message}`);
   const uuid = randomUUID();
   const date = new Date().toISOString();
   try{
@@ -196,19 +197,19 @@ process.on('message', async (_message: string) => {
       switch(_message){
         case IPC_STATES_REQ.SKIP_VOICE_CONNECTION:
           currentPlayer.stop();
-          process.send(IPC_STATES_RESP.SONG_SKIPPED);
+          parentPort.postMessage(IPC_STATES_RESP.SONG_SKIPPED);
           break;
         case IPC_STATES_REQ.PAUSE_VOICE_CONNECTION:
           currentPlayer.pause();
-          process.send(IPC_STATES_RESP.SONG_PAUSED);
+          parentPort.postMessage(IPC_STATES_RESP.SONG_PAUSED);
           break;    
         case IPC_STATES_REQ.RESUME_VOICE_CONNECTION:
           currentPlayer.unpause();
-          process.send(IPC_STATES_RESP.SONG_RESUMED);
+          parentPort.postMessage(IPC_STATES_RESP.SONG_RESUMED);
           break;  
         case IPC_STATES_REQ.LEAVE_VOICE_CONNECTION:
           currentVoiceConnection.destroy();
-          process.send(IPC_STATES_RESP.VOICE_CONNECTION_LEAVED);
+          parentPort.postMessage(IPC_STATES_RESP.VOICE_CONNECTION_LEAVED);
           break;  
         default:
           const decoded = JSON.parse(
@@ -228,16 +229,4 @@ process.on('message', async (_message: string) => {
   } catch(ex) {
     console.error(`[${date}]-[${uuid}]-[PID:${process.pid}] Fail to process parent message: ${_message.toString()}, reason: ${ex.message}`);
   }
-});
-
-process.once('SIGTERM', (code) => {
-  console.log(`[${new Date().toISOString()}]-[${randomUUID()}]-[PID:${process.pid}] Child process received SIGTERM with code: ${code}`);
-  if(currentVoiceConnection != null) { currentVoiceConnection.destroy() };
-  process.exit(0);
-});
-
-process.once('SIGINT', (code) => {
-  console.log(`[${new Date().toISOString()}]-[${randomUUID()}]-[PID:${process.pid}] Child process received SIGINT with code: ${code}`);
-  if(currentVoiceConnection != null) { currentVoiceConnection.destroy() };
-  process.exit(0);
 });
