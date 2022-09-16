@@ -7,15 +7,18 @@ import { Worker, workerData } from 'worker_threads';
 import { promisify } from 'util';
 import { Track } from '../track' ;
 import { IPC_STATES_REQ, IPC_STATES_RESP } from './../constants/ipcStates';
+import { TrackPriority, PriorityQueue } from './../utils'
 import { ForkObject } from './../player';
 import { 
 	Guild, updateGuildById, createGuild, findGuildById, findGuildByGuildId,
 	User, ITrack, updateUserById, createUser, findUserByUserId, findUserById} from './../models';
 import USER_CONFIGS from './../constants/userConfig';
-
+import { AudioConfig } from './';
 const wait = promisify(setTimeout);
 
 class Playlist {
+	
+	public audioConfig: AudioConfig;
 	public readonly guildId: string;
 	public readonly guildDbId: string;
 	public readonly userId: string;
@@ -37,6 +40,12 @@ class Playlist {
 		this.userName = userName;
 		this.childProcess = null;
 		this.playerState = null;
+		// default audio config
+		this.audioConfig = {
+			volume: 1,
+			bass: 0,
+			treble: 0
+		};
 
 		this.startProcessEventListener();
     }
@@ -86,6 +95,57 @@ class Playlist {
 		this.childProcess.on('message', (_message: string) => {
 			this.commandHandler(_message);
 		})
+	}
+
+	public setBass(_bassGain: number): void{
+		let bassVal = Math.round(_bassGain);
+		if(bassVal>=20){
+			this.audioConfig.bass = 20;
+		} else if(bassVal <=0){
+			this.audioConfig.bass = 0;
+		} else {
+			this.audioConfig.bass = bassVal;
+		}
+	}
+
+	public setTreble(_trebleGain: number): void{
+		let trebleVal = Math.round(_trebleGain);
+		if(trebleVal>=20){
+			this.audioConfig.treble = 20;
+		} else if(trebleVal <=0){
+			this.audioConfig.treble = 0;
+		} else {
+			this.audioConfig.treble = trebleVal;
+		}
+	}
+
+	/**
+	 * Get audio config in ffmpeg output format which is string array
+	 */
+	private getAudioConfigFfmpeg(): string[] {
+		let configArr = [];
+		// volume set to default;
+		let volumePrefix = "-af volume="
+		let volumeVal = 1;
+		let volume = volumePrefix + volumeVal.toFixed(1);
+
+		let bassPrefix = "-af bass=g="
+		let bassVal = this.audioConfig.bass;
+		let bass = bassPrefix + bassVal;
+
+		let treblePrefix = "-af treble=g="
+		let trebleVal = this.audioConfig.treble;
+		let treble = treblePrefix + trebleVal;
+
+		// example filter using fireequalizer (Hz,gain(dB)[-20->+20])
+		//configArr.push("-af firequalizer=gain_entry='entry(0,11);entry(250,11);entry(1000,0);entry(4000,0);entry(16000,0)'")
+
+		// example chorus filter
+		//configArr.push("-af chorus=0.5:0.9:50|60|40:0.4|0.32|0.3:0.25|0.4|0.3:2|2.3|1.3")
+		configArr.push(volume);
+		configArr.push(bass);
+		configArr.push(treble);
+		return configArr;
 	}
 
 
@@ -185,6 +245,10 @@ class Playlist {
 		}
 	}
 
+	public clearQueue() {
+		this.queue = [];
+	}
+
     /**
 	 * Attempts to play a Track from the queue, under unique guild
 	 */
@@ -209,7 +273,8 @@ class Playlist {
 			url: nextTrack.url,
 			provider: nextTrack.provider,
 			guildId: this.guildId,
-			userId: this.userId
+			userId: this.userId,
+			audioConfig: this.getAudioConfigFfmpeg()
 		};
 
 		try {

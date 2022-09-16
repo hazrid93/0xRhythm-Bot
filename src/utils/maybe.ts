@@ -48,4 +48,4 @@ class Maybe<T> extends EventEmitter{
     }
 }
 
-export default Maybe;
+export { Maybe };

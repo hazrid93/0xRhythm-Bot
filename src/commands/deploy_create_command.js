@@ -7,6 +7,17 @@ const clientId = process.env.CLIENT_ID;
 
 const commands = [
 	new SlashCommandBuilder().setName('leave').setDescription('Leaves the server'),
+	new SlashCommandBuilder().setName('clear').setDescription('Clear existing queue'),
+	new SlashCommandBuilder().setName('config').setDescription('Set the audio config e.x: bass, treble')
+		.addNumberOption(option =>
+			option.setName('bass')
+				.setDescription('Bass gain level for tracks, 0-20 (defaults to 0)')
+				.setRequired(true))
+		.addNumberOption(option =>
+			option.setName('treble')
+				.setDescription('Treble gain level for tracks, 0-20 (defaults to 0)')
+				.setRequired(true)),
+	new SlashCommandBuilder().setName('treble').setDescription('Set the treble level 0-20'),
 	new SlashCommandBuilder().setName('pause').setDescription('Pause the current audio'),
 	new SlashCommandBuilder().setName('resume').setDescription('Resume the paused audio'),
 	new SlashCommandBuilder().setName('queue').setDescription('Print the audio queue'),

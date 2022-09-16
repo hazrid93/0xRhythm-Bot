@@ -3,14 +3,17 @@ import { AudioResource, createAudioResource } from '@discordjs/voice';
 import playdl, { YouTubeStream, YouTubeVideo, InfoData } from 'play-dl'
 import cp from "child_process";
 import { randomUUID } from 'crypto'
+import { TrackPriority } from './../utils'
 
 class Track implements TrackData {
+    public priority: TrackPriority;
     public readonly url: string;
     public readonly provider: SongProvider;
     public title: string;
-    constructor(url, provider) {
+    constructor(url, provider, priority = TrackPriority.LOW) {
         this.url = url;
         this.provider = provider;
+        this.priority = priority;
     }
 
     /**

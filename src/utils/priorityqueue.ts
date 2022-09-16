@@ -1,3 +1,4 @@
+import { Track} from './../track';
 // priority queue using binary heap (max heap)
 // note max element are only guaranteed at root, so there might be value on left side bigger than right
 // this is because there are no relation between left and right subtrees
@@ -87,45 +88,4 @@ class PriorityQueue<T extends Track>{
     }
 }
 
-class Track{
-    priority:TrackPriority;
-    title:string;
-    constructor(_title:string, _priority:TrackPriority){
-        this.priority = _priority;
-        this.title = _title;
-    }
-}
-
-enum TrackPriority {
-    LOW = 0,
-    MEDIUM = 1,
-    HIGH = 2
-}
-
-
-let track6 = new Track("amza", TrackPriority.LOW);
-let track7 = new Track("xsai", TrackPriority.MEDIUM);
-let track1 = new Track("sheila", TrackPriority.LOW);
-let track8 = new Track("2sheila", TrackPriority.LOW);
-let track4 = new Track("mozart", TrackPriority.MEDIUM);
-let track2 = new Track("daiyan", TrackPriority.LOW);
-let track3 = new Track("greenday", TrackPriority.HIGH);
-
-let priorityQueue = new PriorityQueue();
-priorityQueue.enqueue(track1);
-priorityQueue.enqueue(track2);
-priorityQueue.enqueue(track3);
-priorityQueue.enqueue(track4);
-priorityQueue.enqueue(track7);
-priorityQueue.dequeue();
-priorityQueue.dequeue();
-priorityQueue.dequeue();
-priorityQueue.dequeue();
-priorityQueue.dequeue();
-/*
-priorityQueue.enqueue(track6);
-priorityQueue.enqueue(track8);
-priorityQueue.enqueue(track6);
-//priorityQueue.dequeue();
-//priorityQueue.dequeue();
-*/
+export { PriorityQueue };

@@ -172,6 +172,23 @@ client.on('interactionCreate', async (interaction: Interaction)=> {
 		} else {
 			await interaction.reply('Not playing in this server!');
 		}
+	} else if (interaction.commandName === 'config') {
+        const trebleVal = interaction.options.get('treble').value as number;
+        const bassVal = interaction.options.get('bass').value as number;
+		if (subscription) {
+            subscription.setBass(bassVal);
+            subscription.setTreble(trebleVal);
+            await interaction.reply(`Audio config applied to next subsequent tracks!, bass: ${bassVal} , treble: ${trebleVal}`);
+		} else {
+			await interaction.reply('Not playing in this server!');
+		}
+	} else if (interaction.commandName === 'clear') {
+		if (subscription) {
+            subscription.clearQueue();
+			await interaction.reply('Queue cleared');
+		} else {
+			await interaction.reply('Not playing in this server!');
+		}
 	} else if (interaction.commandName === 'pause') {
 		if (subscription) {
 			subscription.sendCommand(IPC_STATES_REQ.PAUSE_VOICE_CONNECTION);

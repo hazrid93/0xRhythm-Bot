@@ -60,10 +60,11 @@ client.on('ready', async () => {
   const provider: SongProvider = decoded.provider;
   const guildId: string = decoded.guildId;
   const userId: string = decoded.userId;
+  const audioConfig: string[] = decoded.audioConfig;
   guild = client.guilds.cache.get(guildId);
   sendMessageToGuild("Joining the voice channel...", guild);
-  const userVoiceChannel = guild.members.cache.get(userId).voice.channel;
-  await execute(url, userVoiceChannel, guild);
+  const userVoiceChannel: VoiceBasedChannel = guild.members.cache.get(userId).voice.channel;
+  await execute(url, userVoiceChannel, guild, audioConfig);
 });
 
 function sendMessageToGuild(_message: string, _guild: Guild){
@@ -81,7 +82,7 @@ function exit(){
   process.exit(0);
 }
 
-async function execute(_url, _voiceChannel, _guild){
+async function execute(_url: string, _voiceChannel: VoiceBasedChannel, _guild: Guild, _audioConfig: string[]){
     //voice related
     const voiceConnection: VoiceConnection = joinVoiceChannel({
       channelId: _voiceChannel.id,
@@ -98,7 +99,7 @@ async function execute(_url, _voiceChannel, _guild){
     let playDlStream =  await playdl.stream(_url, streamOptions);
     let ffmpegStream = ffmpeg(playDlStream.stream)
         .format('mp3')
-        .outputOptions(["-af bass=g=3", "-af treble=g=0" , "-af volume=1.0"])
+        .outputOptions(_audioConfig)
         .on('codecData', function(data) {
             console.log('Input is ' + data.audio + ' audio');
         })
@@ -224,9 +225,10 @@ parentPort.on('message', async (_message: string) => {
           const provider: SongProvider = decoded.provider;
           const guildId: string = decoded.guildId;
           const userId: string = decoded.userId;
+          const audioConfig: string[] = decoded.audioConfig;
           const guild = client.guilds.cache.get(guildId);
           const userVoiceChannel = guild.members.cache.get(userId).voice.channel;
-          await execute(url, userVoiceChannel, guild);
+          await execute(url, userVoiceChannel, guild, audioConfig);
           break;
       }
     }
