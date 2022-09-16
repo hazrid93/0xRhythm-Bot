@@ -2,15 +2,7 @@ const pidusage = require('pidusage');
 import {SongProvider } from "./track";
 import { IPC_STATES_RESP, IPC_STATES_REQ } from './constants/ipcStates';
 import {
-    VoiceConnectionStatus, 
     AudioPlayerStatus, 
-    AudioResource,
-    generateDependencyReport,
-    createAudioPlayer,
-    createAudioResource,
-    entersState,
-    joinVoiceChannel,
-    NoSubscriberBehavior
 } from '@discordjs/voice';
 import Discord, { Interaction, GuildMember, Snowflake } from 'discord.js';
 import { connectToServer, getConnection } from './utils/mongodbutils';
@@ -20,6 +12,7 @@ import { Track } from './track'
 import { Playlist } from './playlist';
 import { Guild, createGuild, findGuildById, findGuildByGuildId } from './models';
 import { randomUUID } from "crypto";
+import { YoutubePlayerHandler } from "./handlers";
 const wait = promisify(setTimeout);
 
 const { Client, GatewayIntentBits, PermissionFlagsBits, 
@@ -98,7 +91,7 @@ client.on('interactionCreate', async (interaction: Interaction)=> {
     if (interaction.commandName === 'play') {
         let _uuid = randomUUID();
         // Extract the video URL from the command
-        const url = interaction.options.get('link')!.value as string;
+        const url = interaction.options.get('value')!.value as string;
         await interaction.deferReply();
         // If a connection to the guild doesn't already exist and the user is in a voice channel, join that channel
         // and create a subscription.
@@ -115,32 +108,17 @@ client.on('interactionCreate', async (interaction: Interaction)=> {
             return;
         }
         try {
-            if(interaction.options.getSubcommand() === 'youtube_url'){
-                let trackType = playdl.yt_validate(url);
-                // validate the track url
-                if(trackType === 'video'){
-                    // Attempt to create a Track from the user's video URL
-                    const track = new Track(url, SongProvider.YOUTUBE);
-                    // get audio info
-                    await track.getAudioInfo();
-                    console.log(`[${new Date().toISOString()}]-[${_uuid}]-[PID:${process.pid}] Track added to guildId: ${guildId}, track info: ${JSON.stringify(track)}`);
-                    // Enqueue the track and reply a success message to the user
-                    subscription.enqueue(track);
+            let subCommand = interaction.options.getSubcommand();
+            if(subCommand === 'youtube'){
+                let handler = new YoutubePlayerHandler(url, subscription);
+                let status = await handler.execute();
+                if(status){
                     await interaction.followUp(`Track added to queue`);
-                } else if(trackType === 'playlist'){
-                    // get youtube playlist, skip hidden videos
-                    const playlist: YouTubePlayList = await playdl.playlist_info(url, { incomplete : true })
-                    const videos: YouTubeVideo[] = await playlist.all_videos();
-                    videos.forEach(_video =>{
-                        const track = new Track(_video.url, SongProvider.YOUTUBE);
-                        subscription.strictEnqueue(track);
-                    });
-                    subscription.startProcessQueue()
-                    await interaction.followUp(`Playlist added to queue`);
                 } else {
                     await interaction.followUp(`Track format is not supported!`);
                 }
             }
+           
         } catch (error) {
             console.warn(error);
             await interaction.reply('Failed to play track, please try again later!');
@@ -182,6 +160,14 @@ client.on('interactionCreate', async (interaction: Interaction)=> {
 		} else {
 			await interaction.reply('Not playing in this server!');
 		}
+	} else if (interaction.commandName === 'status') {
+        let status = null;
+		status = await pidusage(process.pid);
+        if(status){
+            await interaction.reply("Process status: " + JSON.stringify(status));
+        } else {
+            await interaction.reply("Fail to get process status");
+        }
 	} else if (interaction.commandName === 'clear') {
 		if (subscription) {
             subscription.clearQueue();

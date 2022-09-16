@@ -335,7 +335,6 @@ class Playlist {
 			this.stop();
 		}
 	}
-	
 }
 
 export { Playlist };

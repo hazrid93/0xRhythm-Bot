@@ -46,6 +46,21 @@ class Maybe<T> extends EventEmitter{
             return this;
         }
     }
+
+    public async bindAsync(_ : (input: T)=> any) {
+        try{
+            const result = await _(this.input);
+            if( result == null ) {
+                return this;
+            } else {
+                return new Maybe<T>( result);
+            }
+        } catch (ex) {
+            console.error(`Fail to process one of the binded method, reason: ${ex.message}`);
+            this.emit(this.ERROR_EVENT, `Fail to process one of the binded method, reason: ${ex.message}`);
+            return this;
+        }
+    }
 }
 
 export { Maybe };

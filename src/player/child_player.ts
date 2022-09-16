@@ -13,7 +13,8 @@ import {
   generateDependencyReport,
   createAudioResource,
   entersState,
-  joinVoiceChannel
+  joinVoiceChannel,
+  PlayerSubscription
 } from '@discordjs/voice';
 import Discord, { Guild, Interaction, GuildMember, Snowflake, Channel, TextChannel, GuildBasedChannel, VoiceBasedChannel } from 'discord.js';
 import { promisify } from 'util';
@@ -22,7 +23,7 @@ import { randomUUID } from 'crypto';
 const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
 import ffmpeg from 'fluent-ffmpeg';
 import { PassThrough, Readable, Writable } from "stream";
-
+ffmpeg.setFfmpegPath(ffmpegPath);
 const wait = promisify(setTimeout);
 const { Client, GatewayIntentBits, PermissionFlagsBits, 
   ActionRowBuilder, ButtonBuilder, ButtonStyle,
@@ -78,6 +79,8 @@ function sendMessageToGuild(_message: string, _guild: Guild){
 }
 
 function exit(){
+  currentPlayer.removeAllListeners();
+  currentVoiceConnection.removeAllListeners()
   currentVoiceConnection.destroy();
   process.exit(0);
 }
@@ -93,16 +96,16 @@ async function execute(_url: string, _voiceChannel: VoiceBasedChannel, _guild: G
     const player: AudioPlayer = createAudioPlayer();
     currentPlayer = player;
     let streamOptions = {
-      quality: 0
+      quality: 1,
+      discordPlayerCompatibility: false
     }
     let passStream = new PassThrough();
     let playDlStream =  await playdl.stream(_url, streamOptions);
     let ffmpegStream = ffmpeg(playDlStream.stream)
-        .format('mp3')
+        .format("mp3")
+        .audioChannels(2)
+        .audioBitrate(44100)
         .outputOptions(_audioConfig)
-        .on('codecData', function(data) {
-            console.log('Input is ' + data.audio + ' audio');
-        })
         .on('start', function(commandLine) {
             console.log('Spawned Ffmpeg with command: ' + commandLine);
         })
