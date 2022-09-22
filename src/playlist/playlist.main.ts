@@ -81,8 +81,12 @@ class Playlist {
 	}
 
 	public async getPlaylist(){
+		try { 
 		let playlist = this.queue.printQueue();
 		return playlist;
+		} catch (ex) {
+			console.log(`[${new Date().toISOString()}]-[${randomUUID()}]-[PID:${process.pid}] Fail to fetch playlist queue, reason: ${ex.message}`);
+		}
 	}
 
 	public startChildEventListener() {
@@ -127,29 +131,33 @@ class Playlist {
 	 * Get audio config in ffmpeg output format which is string array
 	 */
 	private getAudioConfigFfmpeg(): string[] {
-		let configArr = [];
-		// volume set to default;
-		let volumePrefix = "-af volume="
-		let volumeVal = 1;
-		let volume = volumePrefix + volumeVal.toFixed(1);
+		try{
+			let configArr = [];
+			// volume set to default;
+			let volumePrefix = "-af volume="
+			let volumeVal = 1;
+			let volume = volumePrefix + volumeVal.toFixed(1);
 
-		let bassPrefix = "-af bass=g="
-		let bassVal = this.audioConfig.bass;
-		let bass = bassPrefix + bassVal;
+			let bassPrefix = "-af bass=g="
+			let bassVal = this.audioConfig.bass;
+			let bass = bassPrefix + bassVal;
 
-		let treblePrefix = "-af treble=g="
-		let trebleVal = this.audioConfig.treble;
-		let treble = treblePrefix + trebleVal;
+			let treblePrefix = "-af treble=g="
+			let trebleVal = this.audioConfig.treble;
+			let treble = treblePrefix + trebleVal;
 
-		// example filter using fireequalizer (Hz,gain(dB)[-20->+20])
-		//configArr.push("-af firequalizer=gain_entry='entry(0,11);entry(250,11);entry(1000,0);entry(4000,0);entry(16000,0)'")
+			// example filter using fireequalizer (Hz,gain(dB)[-20->+20])
+			//configArr.push("-af firequalizer=gain_entry='entry(0,11);entry(250,11);entry(1000,0);entry(4000,0);entry(16000,0)'")
 
-		// example chorus filter
-		//configArr.push("-af chorus=0.5:0.9:50|60|40:0.4|0.32|0.3:0.25|0.4|0.3:2|2.3|1.3")
-		configArr.push(volume);
-		configArr.push(bass);
-		configArr.push(treble);
-		return configArr;
+			// example chorus filter
+			//configArr.push("-af chorus=0.5:0.9:50|60|40:0.4|0.32|0.3:0.25|0.4|0.3:2|2.3|1.3")
+			configArr.push(volume);
+			configArr.push(bass);
+			configArr.push(treble);
+			return configArr;
+		} catch (ex) {
+			console.log(`[${new Date().toISOString()}]-[${randomUUID()}]-[PID:${process.pid}] Fail to fetch playlist queue, reason: ${ex.message}`);
+		}
 	}
 
 
@@ -165,59 +173,54 @@ class Playlist {
 	}
 
 	public async updateUser(_track: Track){
-		let userData = await findUserByUserId(this.userId);
-		// <TODO> remove code duplication
-		if(userData == null){
-			let trackObj: ITrack = {
-				url: _track.url,
-				title: (_track.title != null) ? _track.title : "NOT_AVAILABLE",
-				provider: _track.provider
+		try{
+			let userData = await findUserByUserId(this.userId);
+			// <TODO> remove code duplication
+			if(userData == null){
+				let trackObj: ITrack = {
+					url: _track.url,
+					title: (_track.title != null) ? _track.title : "NOT_AVAILABLE",
+					provider: _track.provider
+				}
+				let userObj: User = {
+					name: this.userName,
+					userId: this.userId,
+					guild: this.guildDbId,
+					tracks: Array.of(trackObj)
+				}
+				let userPersisted = await createUser(userObj);
+				let guildData = await findGuildByGuildId(this.guildId);
+				let guildUsers = guildData.users;
+				guildUsers.push(userPersisted)
+				let guildObj: Guild = {
+					name: guildData.name,
+					guildId: guildData.guildId,
+					users: guildUsers
+				}
+				await updateGuildById(this.guildDbId, guildObj);
+			} else {
+				let trackObj: ITrack = {
+					url: _track.url,
+					title: (_track.title != null) ? _track.title : "NOT_AVAILABLE",
+					provider: _track.provider
+				}
+				let newTrack = userData.tracks;
+				// Remove old item from track array and add new one to the last.
+				// keep track array at specific length
+				if(newTrack.length >= USER_CONFIGS.TRACK_LIMIT){
+					newTrack.shift();
+				}
+				newTrack.push(trackObj);
+				let userObj: User = {
+					name: this.userName,
+					userId: this.userId,
+					guild: this.guildDbId,
+					tracks: newTrack
+				}
+				await updateUserById(userData._id, userObj);
 			}
-			let userObj: User = {
-				name: this.userName,
-				userId: this.userId,
-				guild: this.guildDbId,
-				tracks: Array.of(trackObj)
-			}
-			let userPersisted = await createUser(userObj);
-			let guildData = await findGuildByGuildId(this.guildId);
-			let guildUsers = guildData.users;
-			guildUsers.push(userPersisted)
-			let guildObj: Guild = {
-				name: guildData.name,
-				guildId: guildData.guildId,
-				users: guildUsers
-			}
-			await updateGuildById(this.guildDbId, guildObj);
-		} else {
-			let trackObj: ITrack = {
-				url: _track.url,
-				title: (_track.title != null) ? _track.title : "NOT_AVAILABLE",
-				provider: _track.provider
-			}
-			let newTrack = userData.tracks;
-			// Remove old item from track array and add new one to the last.
-			// keep track array at specific length
-			if(newTrack.length >= USER_CONFIGS.TRACK_LIMIT){
-				newTrack.shift();
-			}
-			newTrack.push(trackObj);
-			let userObj: User = {
-				name: this.userName,
-				userId: this.userId,
-				guild: this.guildDbId,
-				tracks: newTrack
-			}
-			let userPersisted = await updateUserById(userData._id, userObj);
-			let guildData = await findGuildByGuildId(this.guildId);
-			let guildUsers = guildData.users;
-			guildUsers.push(userPersisted)
-			let guildObj: Guild = {
-				name: guildData.name,
-				guildId: guildData.guildId,
-				users: guildUsers
-			}
-			await updateGuildById(this.guildDbId, guildObj);
+		} catch (ex) {
+			console.log(`[${new Date().toISOString()}]-[${randomUUID()}]-[PID:${process.pid}] Fail to fetch playlist queue, reason: ${ex.message}`);
 		}
 	}
 

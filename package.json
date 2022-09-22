@@ -5,9 +5,15 @@
     "main": "dist/app.js",
     "type": "commonjs",
     "scripts": {
-        "start": "cross-env  DOTENV_CONFIG_PATH=.env.local node --trace-warnings -r dotenv/config -r ts-node/register src/app.ts",
-        "start:stg": "cross-env NODE_ENV=staging nodemon --inspect --trace-warnings",
-        "start:prod": "cross-env NODE_ENV=production node --trace-warnings dist/app",
+        "start": "cross-env DOTENV_CONFIG_PATH=.env.local node --trace-warnings -r dotenv/config -r ts-node/register src/app.ts",
+        "start:prod": "cross-env DOTENV_CONFIG_PATH=.env.prod node --trace-warnings -r dotenv/config -r ts-node/register src/app.ts",
+        "start:pm2:dev": "pm2 start npm --name \"0xRythm-DEV\" -- run start --time --log ./logs",
+        "delete:pm2:dev": "pm2 delete \"0xRythm-DEV\" ",
+        "start:pm2:prod": "pm2 install pm2-logrotate;pm2 set pm2-logrotate:max_size 100M;pm2 start npm --name \"0xRythm-PROD\" -- run start:prod --time --log ./logs",
+        "delete:pm2:prod": "pm2 delete \"0xRythm-PROD\" ",
+        "list:pm2": "pm2 list",
+        "monitor:pm2": "pm2 monit",
+        "logs:pm2": "pm2 logs",
         "build": "tsc",
         "test": "echo \"Error: no test specified\" && exit 1"
     },
@@ -37,6 +43,7 @@
         "node-opus": "^0.3.3",
         "pidusage": "^3.0.0",
         "play-dl": "^1.9.5",
+        "pm2": "^5.2.0",
         "typescript": "^4.8.2",
         "workerpool": "^6.2.1"
     },
