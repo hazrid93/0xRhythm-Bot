@@ -1,6 +1,6 @@
 const { SlashCommandBuilder, Routes } = require('discord.js');
 const { REST } = require('@discordjs/rest');
-require('dotenv').config({ path: `./../../.env.prod` });
+require('dotenv').config({ path: `./../../../.env.prod` });
 
 const clientToken = process.env.STAGING_TOKEN;
 const clientId = process.env.CLIENT_ID;
