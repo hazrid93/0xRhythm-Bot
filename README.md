@@ -16,4 +16,4 @@ Simple little music bot to queue up and play youtube audio over discord voice ch
     > <To be updated>
 
 ### Running the Application
--   Run `npm start`
+-   Run `npm run start:pm2:dev`

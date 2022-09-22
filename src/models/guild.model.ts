@@ -38,7 +38,7 @@ guildSchema.pre('findOne', function(){
  })
 
 async function getGuildModel(callback: Function){
-    let connection = await getConnection();
+    let connection = await getConnection(); // get connection to mongodb server
     let GuildModel = await connection.model('Guild', guildSchema);
     callback(GuildModel) 
 };

@@ -17,6 +17,7 @@ var _connection: typeof mongoose;
 
 async function connectToServer(callback){
     await mongoose.connect(DB_URL, options).then(con => {
+    
         _connection = con;
         callback();
     }).catch(err => {
