@@ -1,7 +1,6 @@
 # 0xRhythm-Bot
 
-## Staging information
-- staging bot name: staging-umaru-rythm
+## Invite link for bot im running on my instance
 - inv url [link](https://discord.com/api/oauth2/authorize?client_id=935569503729897562&permissions=1084516956992&scope=bot%20applications.commands)
 
 ## Requirement
@@ -11,10 +10,22 @@
 Simple little music bot to queue up and play youtube audio over discord voice channels.
 
 ## Bot Commands
-
--   Show some helpful info
-    > <To be updated>
-
+```
+/play 
+    - <soundcloud|youtube: Select the track provider.> 
+    - <value|song name: Url of track or song name to search for.> 
+    - <priority: 0, 1, 2 .Higher means it will override the queue position.>
+/clear Clear the current playlist in the guild.
+/skip Skip the current track in the guild playlist.
+/leave Boot the player from the voice channel, this will clear the playlist.
+/pause Pause the current track that is playing.
+/resume Resume the current track that is playing.
+/queue Prints the current playlist in the guild.
+/status Get status of the server.
+/config 
+    - <bass: 0-20 .Set the bass value for the subsequent track in playlist.>
+    - <treble: 0-20 .Set the treble value for the subsequent track in playlist.>
+```
 ### Running the Application
     Note: 
     1) Setup .env.local for development server and .env.prod for production server on project
