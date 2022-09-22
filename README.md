@@ -2,7 +2,7 @@
 
 ## Staging information
 - staging bot name: staging-umaru-rythm
-- inv url [link](https://discord.com/api/oauth2/authorize?client_id=937640440428118037&permissions=139623607104&scope=bot)
+- inv url [link](https://discord.com/api/oauth2/authorize?client_id=935569503729897562&permissions=1084516956992&scope=bot%20applications.commands)
 
 ## Requirement
 -Node: v16.17.x <br/>
