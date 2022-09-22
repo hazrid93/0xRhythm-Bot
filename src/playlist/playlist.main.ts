@@ -82,8 +82,8 @@ class Playlist {
 
 	public async getPlaylist(){
 		try { 
-		let playlist = this.queue.printQueue();
-		return playlist;
+			let playlist = this.queue.printQueue();
+			return playlist;
 		} catch (ex) {
 			console.log(`[${new Date().toISOString()}]-[${randomUUID()}]-[PID:${process.pid}] Fail to fetch playlist queue, reason: ${ex.message}`);
 		}

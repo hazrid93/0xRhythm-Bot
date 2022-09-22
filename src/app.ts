@@ -149,12 +149,14 @@ client.on('interactionCreate', async (interaction: Interaction)=> {
                 await interaction.reply('Nothing is currently playing');
                 return;
             } else {
-                let queue =  (await subscription.getPlaylist())
-                    .slice(0,10)
+                let queue =  await subscription.getPlaylist();
+                let playlistQueue = queue.slice(0,10)
                     .map((data, index) => {
-                        return `${index+1} - [${data.title}] - ${data.url}`;
+                        if(data){
+                            return `${index+1} - [${data.title? data.title : '...'}] - ${data.url}`;
+                        }
                     }).join('\n');
-                await interaction.reply(queue? queue : "No item are queued");
+                await interaction.reply(playlistQueue ? playlistQueue : "No item are queued");
                 
             }
 		} else {

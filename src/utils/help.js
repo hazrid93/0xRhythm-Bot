@@ -1,4 +1,9 @@
 export const HELP_TEXT = `
+________________________________________________________________
+VERSION: 0.3.0
+GITHUB LINK: https://github.com/hazrid93/0xRhythm-Bot
+________________________________________________________________
+
 /play 
     - <soundcloud|youtube: Select the track provider.> 
     - <value|song name: Url of track or song name to search for.> 
