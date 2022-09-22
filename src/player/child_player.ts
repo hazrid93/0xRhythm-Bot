@@ -18,10 +18,8 @@ import Discord, { Guild, Interaction, GuildMember, Snowflake, Channel, TextChann
 import { promisify } from 'util';
 import playdl from 'play-dl';
 import { randomUUID } from 'crypto';
-const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
 import ffmpeg from 'fluent-ffmpeg';
 import { PassThrough, Readable, Writable } from "stream";
-ffmpeg.setFfmpegPath(ffmpegPath);
 const wait = promisify(setTimeout);
 const { Client, GatewayIntentBits } = Discord;
 
