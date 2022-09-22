@@ -17,7 +17,6 @@ import { AudioConfig } from './';
 const wait = promisify(setTimeout);
 
 class Playlist {
-	
 	public audioConfig: AudioConfig;
 	public readonly guildId: string;
 	public readonly guildDbId: string;
@@ -25,7 +24,7 @@ class Playlist {
 	public readonly userName: string;
     public childProcess: Worker;
 	public playerState: AudioPlayerStatus;
-	public queue: Track[];
+	public queue: PriorityQueue<Track>;
 	public queueLock = false;
 
     public constructor(
@@ -33,7 +32,7 @@ class Playlist {
 		guildId: string,
 		userId: string,
 		userName: string) {
-		this.queue = [];
+		this.queue = new PriorityQueue();
 		this.guildDbId = guildDbId;
 		this.guildId = guildId;
 		this.userId = userId;
@@ -79,6 +78,11 @@ class Playlist {
 				process.exit(0);
 			}
 		});
+	}
+
+	public async getPlaylist(){
+		let playlist = this.queue.printQueue();
+		return playlist;
 	}
 
 	public startChildEventListener() {
@@ -155,7 +159,7 @@ class Playlist {
 	 * @param track The track to add to the queue
 	 */
 	public enqueue(_track: Track) {
-		this.queue.push(_track);
+		this.queue.enqueue(_track);
 		this.updateUser(_track); // no need to await because we dont need the response.
 		this.processQueue();
 	}
@@ -219,7 +223,7 @@ class Playlist {
 
 	// queue only without processing
 	public strictEnqueue(_track: Track) {
-		this.queue.push(_track);
+		this.queue.enqueue(_track);
 		this.updateUser(_track);
 	}
 
@@ -233,7 +237,7 @@ class Playlist {
 	 */
 	public async stop() {
 		this.queueLock = false;
-		this.queue = [];
+		this.queue.clear();
 		if(this.childProcess != null) {
 			try {
 				await this.childProcess.terminate();
@@ -246,7 +250,7 @@ class Playlist {
 	}
 
 	public clearQueue() {
-		this.queue = [];
+		this.queue.clear();
 	}
 
     /**
@@ -258,14 +262,13 @@ class Playlist {
 		// If the queue is locked (already being processed), is empty, or the audio player is already playing something, return
 		if (this.queueLock 
 			|| (this.playerState !== AudioPlayerStatus.Idle && this.playerState != null)
-			|| this.queue.length === 0) {
+			|| this.queue.length() === 0) {
 			return;
 		}
 		// Lock the queue to guarantee safe access
 		this.queueLock = true;
 
-		// Take the first item from the queue. This is guaranteed to exist due to the non-empty check above.
-		const nextTrack: Track = this.queue.shift();
+		const nextTrack: Track = this.queue.dequeue();
 
 		// create base64 encode of data buffer for data we want to pass to child process
 		const forkObj: ForkObject = {

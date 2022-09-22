@@ -7,6 +7,7 @@ const clientId = process.env.CLIENT_ID;
 
 const commands = [
 	new SlashCommandBuilder().setName('leave').setDescription('Leaves the server'),
+	new SlashCommandBuilder().setName('help').setDescription('Print the commands manual'),
 	new SlashCommandBuilder().setName('clear').setDescription('Clear existing queue'),
 	new SlashCommandBuilder().setName('status').setDescription('Get process status'),
 	new SlashCommandBuilder().setName('config').setDescription('Set the audio config e.x: bass, treble')
@@ -18,14 +19,10 @@ const commands = [
 			option.setName('treble')
 				.setDescription('Treble gain level for tracks, 0-20 (defaults to 0)')
 				.setRequired(true)),
-	new SlashCommandBuilder().setName('treble').setDescription('Set the treble level 0-20'),
 	new SlashCommandBuilder().setName('pause').setDescription('Pause the current audio'),
 	new SlashCommandBuilder().setName('resume').setDescription('Resume the paused audio'),
 	new SlashCommandBuilder().setName('queue').setDescription('Print the audio queue'),
 	new SlashCommandBuilder().setName('skip').setDescription('Skip the current audio'),
-	new SlashCommandBuilder().setName('ping').setDescription('Replies with pong!'),
-	new SlashCommandBuilder().setName('server').setDescription('Replies with server info!'),
-	new SlashCommandBuilder().setName('user').setDescription('Replies with user info!'),
 	new SlashCommandBuilder().setName('play')
 		.setDescription('Play audio track in the voice channel')
 		.addSubcommand(subcommand =>
@@ -34,14 +31,24 @@ const commands = [
 				.addStringOption(option =>
 					option.setName('value')
 						.setDescription('Link of the video or playlist')
-						.setRequired(true)))
+						.setRequired(true))
+				.addNumberOption(option =>
+					option.setName('priority')
+						.setDescription('Track priority, 0:low, 1:medium, 2:high. Higher priority will be higher in queue')
+						.setRequired(true))
+		)
 		.addSubcommand(subcommand =>
 			subcommand.setName('soundcloud')
 				.setDescription('Url/name to play/search from Soundcloud')
 				.addStringOption(option =>
 					option.setName('value')
 						.setDescription('Link of the track')
-						.setRequired(true)))
+						.setRequired(true))
+				.addNumberOption(option =>
+					option.setName('priority')
+						.setDescription('Track priority, 0:low, 1:medium, 2:high. Higher priority will be higher in queue')
+						.setRequired(true))
+		)
 	].map(command => command.toJSON());
 
 const rest = new REST({ version: '10' }).setToken(clientToken);

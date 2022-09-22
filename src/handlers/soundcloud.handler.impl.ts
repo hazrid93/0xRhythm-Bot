@@ -1,17 +1,17 @@
 import { PlayStrategy } from '.';
 import { randomUUID } from 'crypto'
 import {SongProvider } from "../track";
-import playdl, { YouTubePlayList, YouTubeVideo, InfoData } from 'play-dl';
+import playdl, { SoundCloudPlaylist, SoundCloudTrack } from 'play-dl';
 import { Maybe, TrackPriority } from '../utils';
-import { Track } from './../track'
-import { Playlist } from './../playlist';
+import { Track } from '../track'
+import { Playlist } from '../playlist';
 
-class YoutubePlayerHandler implements PlayStrategy {
+class SouncloudHandler implements PlayStrategy {
     private url: string;
     private subscription: Playlist;
     private priority: TrackPriority; 
 
-    private PROVIDER: SongProvider = SongProvider.YOUTUBE;
+    private PROVIDER: SongProvider = SongProvider.SOUNDCLOUD;
 
     constructor(_url: string, _subscription: Playlist, _priority: TrackPriority){
         this.url = _url;
@@ -21,40 +21,45 @@ class YoutubePlayerHandler implements PlayStrategy {
 
    async execute() {
         let _uuid = randomUUID();
+        
         try {
+            // get soundcloud free client Id
+            await playdl.getFreeClientID().then((clientID) => playdl.setToken({
+                soundcloud : {
+                    client_id : clientID
+                }
+            }))
+
             let urlOrName = this.url;
             let urlPrefix = "^(http|https)";
             let pattern = new RegExp(urlPrefix);
             let hasPrefix = pattern.test(urlOrName);
 
             if(hasPrefix == false){
-                let searchVidUrl = await playdl.search(urlOrName, { limit : 1, source : { youtube : "video" } }) 
-                if(searchVidUrl){
-                    this.url = searchVidUrl[0].url;
+                let searchTrackUrl = await playdl.search(urlOrName, { limit : 1, source : { soundcloud : "tracks" } }) 
+                if(searchTrackUrl){
+                    this.url = searchTrackUrl[0].url;
                 } else {
                     return false;
                 }
             }
 
-            let trackType = playdl.yt_validate(this.url);
+            let scTrack = await playdl.soundcloud(this.url);
             // validate the track url
-            if(trackType === 'video'){
-                const title = await this.fetchYoutubeUrlInfo(this.url);
+            if(scTrack.type === 'track'){
                 // Attempt to create a Track from the user's video URL
-                const track = new Track(this.url, title, this.PROVIDER, this.priority);
-                
+                const track = new Track(this.url, scTrack.name ,this.PROVIDER, this.priority);
                 // Enqueue the track and reply a success message to the user
                 this.subscription.enqueue(track);
                 console.log(`[${new Date().toISOString()}]-[${_uuid}]-[PID:${process.pid}] Track added, track info: ${JSON.stringify(track)}`);
                 return true;
-            } else if(trackType === 'playlist'){
-                // get youtube playlist, skip hidden videos
-                const playlist: YouTubePlayList = await playdl.playlist_info(this.url, { incomplete : true })
-                const videos: YouTubeVideo[] = await playlist.all_videos();
-                videos.forEach(async (_video, index) =>{
+            } else if(scTrack.type === 'playlist'){
+                // get soundcloud playlist
+                const videos: SoundCloudTrack[] = await (scTrack as SoundCloudPlaylist).all_tracks();
+                videos.forEach(async (_video,index) =>{
                     let date = new Date();
                     date.setMilliseconds(date.getMilliseconds() + index);
-                    const track = new Track(_video.url, _video.title, SongProvider.YOUTUBE, this.priority, date);
+                    const track = new Track(_video.url, _video.name, SongProvider.SOUNDCLOUD, this.priority ,date);
                     this.subscription.strictEnqueue(track);
                     console.log(`[${new Date().toISOString()}]-[${_uuid}]-[PID:${process.pid}] Track added, track info: ${JSON.stringify(track)}`);
                 });
@@ -69,19 +74,6 @@ class YoutubePlayerHandler implements PlayStrategy {
         }
     }
 
-    async fetchYoutubeUrlInfo(_url: string){
-        const uuid = randomUUID();
-        let title;
-        try {
-            let yt_info: InfoData = await playdl.video_basic_info(_url, { htmldata : false });
-            title = yt_info.video_details.title;
-            return title
-        } catch (ex) {
-            console.error(`[${new Date().toISOString()}]-[${uuid}]-[PID:${process.pid}] Fail to fetch youtube video information, reason: ${ex.message}`);
-        }
-        return 'NOT_AVAILABLE';
-    }
-
 }
 
-export { YoutubePlayerHandler };
+export { SouncloudHandler };

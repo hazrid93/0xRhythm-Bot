@@ -10,11 +10,9 @@ import {
 	AudioPlayerStatus,
 	AudioResource,
 	createAudioPlayer,
-  generateDependencyReport,
   createAudioResource,
   entersState,
   joinVoiceChannel,
-  PlayerSubscription
 } from '@discordjs/voice';
 import Discord, { Guild, Interaction, GuildMember, Snowflake, Channel, TextChannel, GuildBasedChannel, VoiceBasedChannel } from 'discord.js';
 import { promisify } from 'util';
@@ -25,9 +23,7 @@ import ffmpeg from 'fluent-ffmpeg';
 import { PassThrough, Readable, Writable } from "stream";
 ffmpeg.setFfmpegPath(ffmpegPath);
 const wait = promisify(setTimeout);
-const { Client, GatewayIntentBits, PermissionFlagsBits, 
-  ActionRowBuilder, ButtonBuilder, ButtonStyle,
-  EmbedBuilder, SelectMenuBuilder, BaseInteraction } = Discord;
+const { Client, GatewayIntentBits } = Discord;
 
 const clientToken = process.env.STAGING_TOKEN;
 // timeout for disconnection
@@ -48,7 +44,6 @@ const client = new Client({
 });
 
 client.login(clientToken);
-client.on('error', console.warn);
 client.on('ready', async () => {
   console.log('Child player client ready, PID: ' + process.pid);
   const data = workerData.data;
@@ -63,19 +58,19 @@ client.on('ready', async () => {
   const userId: string = decoded.userId;
   const audioConfig: string[] = decoded.audioConfig;
   guild = client.guilds.cache.get(guildId);
-  sendMessageToGuild("Joining the voice channel...", guild);
   const userVoiceChannel: VoiceBasedChannel = guild.members.cache.get(userId).voice.channel;
-  await execute(url, userVoiceChannel, guild, audioConfig);
+  await sendMessageToGuild("Joining the voice channel...", guild);
+  await execute(url, title, userVoiceChannel, guild, audioConfig);
 });
 
-function sendMessageToGuild(_message: string, _guild: Guild){
-  if(currentVoiceConnection == null){
-    _guild.channels.cache.forEach(_channel => {
-      if(_channel.isTextBased()){
-        _channel.send(_message)
-      }
-    });
-  }
+
+async function sendMessageToGuild(_message: string, _guild: Guild){
+  console.log(`Sending message: ${_message}`);
+  _guild.channels.cache.forEach(_channel => {
+    if(_channel.isTextBased()){
+      _channel.send(_message)
+    }
+  });
 }
 
 function exit(){
@@ -85,114 +80,133 @@ function exit(){
   process.exit(0);
 }
 
-async function execute(_url: string, _voiceChannel: VoiceBasedChannel, _guild: Guild, _audioConfig: string[]){
+async function execute(_url: string, _title: string, _voiceChannel: VoiceBasedChannel, _guild: Guild, _audioConfig: string[]){
     //voice related
-    const voiceConnection: VoiceConnection = joinVoiceChannel({
-      channelId: _voiceChannel.id,
-      guildId: _guild.id,
-      adapterCreator: _voiceChannel.guild.voiceAdapterCreator
-    });
-    currentVoiceConnection = voiceConnection;;
-    const player: AudioPlayer = createAudioPlayer();
-    currentPlayer = player;
+    if( currentVoiceConnection == null ){
+      const voiceConnection: VoiceConnection = joinVoiceChannel({
+        channelId: _voiceChannel.id,
+        guildId: _guild.id,
+        adapterCreator: _voiceChannel.guild.voiceAdapterCreator
+      });
+      currentVoiceConnection = voiceConnection;
+      currentVoiceConnection.setMaxListeners(1);
+    }
+    if( currentPlayer == null ){
+      const player: AudioPlayer = createAudioPlayer();
+      currentPlayer = player;
+      currentPlayer.setMaxListeners(1);
+    }
     let streamOptions = {
       quality: 1,
-      discordPlayerCompatibility: false
+      discordPlayerCompatibility: true
     }
-    let passStream = new PassThrough();
+
+    // get soundcloud free client Id
+    await playdl.getFreeClientID().then((clientID) => playdl.setToken({
+      soundcloud : {
+          client_id : clientID
+      }
+    }))
+
     let playDlStream =  await playdl.stream(_url, streamOptions);
+    let passStream = new PassThrough();
     let ffmpegStream = ffmpeg(playDlStream.stream)
         .format("mp3")
         .audioChannels(2)
-        .audioBitrate(44100)
         .outputOptions(_audioConfig)
         .on('start', function(commandLine) {
-            console.log('Spawned Ffmpeg with command: ' + commandLine);
+          sendMessageToGuild('Now playing: ' + _title, _guild);
+          console.log('Spawned Ffmpeg with command: ' + commandLine);
         })
         .on('error', function(err) {
+          if(err.message !== 'Output stream error: Premature close'){
+            sendMessageToGuild('An error occurred, please retry. Reason: ' + err.message, _guild);
             console.log('An error occurred: ' + err.message);
+          }
         })
         .on('end', function() {
            
         }).pipe(passStream, { end: true });
-    
 
     // Attempt to convert the Track into an AudioResource (i.e. start streaming the video)
     let resource = createAudioResource(passStream);
-    player.play(resource);
-    player.addListener("stateChange", (_, newOne) => {
-      if (newOne.status == AudioPlayerStatus.Idle) {
-        parentPort.postMessage(IPC_STATES_RESP.SONG_IDLE);
-        // set timeout to disconnect in 60 second of idling
-        timeoutId = setTimeout(()=> {
-          if(currentVoiceConnection){
-            sendMessageToGuild("Leaving the voice channel...", _guild);
+    currentPlayer.play(resource);
+    if( currentPlayer != null && currentPlayer.listenerCount("stateChange") == 0 ){
+      currentPlayer.addListener("stateChange", (_, newOne) => {
+        if (newOne.status == AudioPlayerStatus.Idle) {
+          parentPort.postMessage(IPC_STATES_RESP.SONG_IDLE);
+          // set timeout to disconnect in 60 second of idling
+          timeoutId = setTimeout(()=> {
+            if(currentVoiceConnection){
+              exit();
+            }
+          }, 30*60*1000); // leave channel in 30 minute of idle
+        } else if(newOne.status == AudioPlayerStatus.Paused){
+          parentPort.postMessage(IPC_STATES_RESP.SONG_PAUSED);
+        } else if(newOne.status == AudioPlayerStatus.Playing){
+          parentPort.postMessage(IPC_STATES_RESP.SONG_PLAYING);
+          clearTimeout(timeoutId);
+          timeoutId = null;
+        }
+      });
+    }
+    
+    if(currentVoiceConnection != null && currentVoiceConnection.listenerCount("stateChange") == 0){
+      currentVoiceConnection.on('stateChange', async (_, newState) => {
+      if (newState.status === VoiceConnectionStatus.Disconnected) {
+        if (newState.reason === VoiceConnectionDisconnectReason.WebSocketClose && newState.closeCode === 4014) {
+          /*
+            If the WebSocket closed with a 4014 code, this means that we should not manually attempt to reconnect,
+            but there is a chance the connection will recover itself if the reason of the disconnect was due to
+            switching voice channels. This is also the same code for the bot being kicked from the voice channel,
+            so we allow 5 seconds to figure out which scenario it is. If the bot has been kicked, we should destroy
+            the voice connection.
+          */
+          try {
+            await entersState(currentVoiceConnection, VoiceConnectionStatus.Connecting, 5_000);
+            // Probably moved voice channel
+          } catch {
+            parentPort.postMessage(IPC_STATES_RESP.REMOVE_GUILD_SUBSCRIPTION);
+            exit();
+            // Probably removed from voice channel
+          }
+        } else if (currentVoiceConnection.rejoinAttempts < 5) {
+          /*
+            The disconnect in this case is recoverable, and we also have <5 repeated attempts so we will reconnect.
+          */
+          await wait((currentVoiceConnection.rejoinAttempts + 1) * 5_000);
+          currentVoiceConnection.rejoin();
+        } else {
+          /*
+            The disconnect in this case may be recoverable, but we have no more remaining attempts - destroy.
+          */
+          parentPort.postMessage(IPC_STATES_RESP.REMOVE_GUILD_SUBSCRIPTION);
+          exit();
+        }
+      } else if (
+        !readyLock &&
+        (newState.status === VoiceConnectionStatus.Connecting || newState.status === VoiceConnectionStatus.Signalling)
+      ) {
+        /*
+          In the Signalling or Connecting states, we set a 20 second time limit for the connection to become ready
+          before destroying the voice connection. This stops the voice connection permanently existing in one of these
+          states.
+        */
+        readyLock = true;
+        try {
+          await entersState(currentVoiceConnection, VoiceConnectionStatus.Ready, 20_000);
+        } catch {
+          if (currentVoiceConnection.state.status !== VoiceConnectionStatus.Destroyed) {
+            parentPort.postMessage(IPC_STATES_RESP.REMOVE_GUILD_SUBSCRIPTION);
             exit();
           }
-        }, 60*1000);
-      } else if(newOne.status == AudioPlayerStatus.Paused){
-        parentPort.postMessage(IPC_STATES_RESP.SONG_PAUSED);
-      } else if(newOne.status == AudioPlayerStatus.Playing){
-        parentPort.postMessage(IPC_STATES_RESP.SONG_PLAYING);
-        clearTimeout(timeoutId);
-        timeoutId = null;
+        } finally {
+          readyLock = false;
+        }
       }
     });
-    
-    voiceConnection.on('stateChange', async (_, newState) => {
-    if (newState.status === VoiceConnectionStatus.Disconnected) {
-      if (newState.reason === VoiceConnectionDisconnectReason.WebSocketClose && newState.closeCode === 4014) {
-        /*
-          If the WebSocket closed with a 4014 code, this means that we should not manually attempt to reconnect,
-          but there is a chance the connection will recover itself if the reason of the disconnect was due to
-          switching voice channels. This is also the same code for the bot being kicked from the voice channel,
-          so we allow 5 seconds to figure out which scenario it is. If the bot has been kicked, we should destroy
-          the voice connection.
-        */
-        try {
-          await entersState(voiceConnection, VoiceConnectionStatus.Connecting, 5_000);
-          // Probably moved voice channel
-        } catch {
-          parentPort.postMessage(IPC_STATES_RESP.REMOVE_GUILD_SUBSCRIPTION);
-          exit();
-          // Probably removed from voice channel
-        }
-      } else if (voiceConnection.rejoinAttempts < 5) {
-        /*
-          The disconnect in this case is recoverable, and we also have <5 repeated attempts so we will reconnect.
-        */
-        await wait((voiceConnection.rejoinAttempts + 1) * 5_000);
-        voiceConnection.rejoin();
-      } else {
-        /*
-          The disconnect in this case may be recoverable, but we have no more remaining attempts - destroy.
-        */
-        parentPort.postMessage(IPC_STATES_RESP.REMOVE_GUILD_SUBSCRIPTION);
-        exit();
-      }
-    } else if (
-      !readyLock &&
-      (newState.status === VoiceConnectionStatus.Connecting || newState.status === VoiceConnectionStatus.Signalling)
-    ) {
-      /*
-        In the Signalling or Connecting states, we set a 20 second time limit for the connection to become ready
-        before destroying the voice connection. This stops the voice connection permanently existing in one of these
-        states.
-      */
-      readyLock = true;
-      try {
-        await entersState(voiceConnection, VoiceConnectionStatus.Ready, 20_000);
-      } catch {
-        if (voiceConnection.state.status !== VoiceConnectionStatus.Destroyed) {
-          parentPort.postMessage(IPC_STATES_RESP.REMOVE_GUILD_SUBSCRIPTION);
-          exit();
-        }
-      } finally {
-        readyLock = false;
-      }
-    }
-  });
-  voiceConnection.subscribe(player);
+  }
+  currentVoiceConnection.subscribe(currentPlayer);
 }
 
 // for existing voice connection
@@ -231,7 +245,7 @@ parentPort.on('message', async (_message: string) => {
           const audioConfig: string[] = decoded.audioConfig;
           const guild = client.guilds.cache.get(guildId);
           const userVoiceChannel = guild.members.cache.get(userId).voice.channel;
-          await execute(url, userVoiceChannel, guild, audioConfig);
+          await execute(url, title, userVoiceChannel, guild, audioConfig);
           break;
       }
     }

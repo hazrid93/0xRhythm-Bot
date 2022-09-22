@@ -1,5 +1,4 @@
 const pidusage = require('pidusage');
-import {SongProvider } from "./track";
 import { IPC_STATES_RESP, IPC_STATES_REQ } from './constants/ipcStates';
 import {
     AudioPlayerStatus, 
@@ -7,17 +6,15 @@ import {
 import Discord, { Interaction, GuildMember, Snowflake } from 'discord.js';
 import { connectToServer, getConnection } from './utils/mongodbutils';
 import { promisify } from 'util';
-import playdl, { YouTubePlayList, YouTubeVideo } from 'play-dl';
 import { Track } from './track'
 import { Playlist } from './playlist';
 import { Guild, createGuild, findGuildById, findGuildByGuildId } from './models';
 import { randomUUID } from "crypto";
-import { YoutubePlayerHandler } from "./handlers";
+import { HELP_TEXT } from './utils';
+import { YoutubePlayerHandler, SouncloudHandler } from "./handlers";
 const wait = promisify(setTimeout);
 
-const { Client, GatewayIntentBits, PermissionFlagsBits, 
-    ActionRowBuilder, ButtonBuilder, ButtonStyle,
-    EmbedBuilder, SelectMenuBuilder, BaseInteraction } = Discord;
+const { Client, GatewayIntentBits } = Discord;
 const clientToken = process.env.STAGING_TOKEN;
 
 const client = new Client({ 
@@ -91,7 +88,8 @@ client.on('interactionCreate', async (interaction: Interaction)=> {
     if (interaction.commandName === 'play') {
         let _uuid = randomUUID();
         // Extract the video URL from the command
-        const url = interaction.options.get('value')!.value as string;
+        const url = interaction.options.get('value').value as string;
+        const priority = interaction.options.get('priority').value as number;
         await interaction.deferReply();
         // If a connection to the guild doesn't already exist and the user is in a voice channel, join that channel
         // and create a subscription.
@@ -110,10 +108,18 @@ client.on('interactionCreate', async (interaction: Interaction)=> {
         try {
             let subCommand = interaction.options.getSubcommand();
             if(subCommand === 'youtube'){
-                let handler = new YoutubePlayerHandler(url, subscription);
+                let handler = new YoutubePlayerHandler(url, subscription, priority);
                 let status = await handler.execute();
                 if(status){
-                    await interaction.followUp(`Track added to queue`);
+                    await interaction.followUp(`Youtube track added to queue`);
+                } else {
+                    await interaction.followUp(`Track format is not supported!`);
+                }
+            } else if(subCommand === 'soundcloud'){
+                let handler = new SouncloudHandler(url, subscription, priority);
+                let status = await handler.execute();
+                if(status){
+                    await interaction.followUp(`Soundcloud track added to queue`);
                 } else {
                     await interaction.followUp(`Track format is not supported!`);
                 }
@@ -133,19 +139,23 @@ client.on('interactionCreate', async (interaction: Interaction)=> {
 		} else {
 			await interaction.reply('Not playing in this server!');
 		}
+	} else if (interaction.commandName === 'help') {
+        await interaction.reply(HELP_TEXT);
+		
 	} else if (interaction.commandName === 'queue') {
 		// Print out the current queue, including up to the next 5 tracks to be played.
 		if (subscription) {
-            if(subscription.playerState === AudioPlayerStatus.Idle && subscription.queue.length == 0){
+            if(subscription.playerState === AudioPlayerStatus.Idle && subscription.queue.length() == 0){
                 await interaction.reply('Nothing is currently playing');
                 return;
             } else {
-                const queue =  subscription.queue
-                .slice(0,5)
-                .map((data, index) => {
-                    return `${index+1} - [${data.title}] - ${data.url}`;
-                }).join('\n');
+                let queue =  (await subscription.getPlaylist())
+                    .slice(0,10)
+                    .map((data, index) => {
+                        return `${index+1} - [${data.title}] - ${data.url}`;
+                    }).join('\n');
                 await interaction.reply(queue? queue : "No item are queued");
+                
             }
 		} else {
 			await interaction.reply('Not playing in this server!');
