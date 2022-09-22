@@ -1,18 +1,23 @@
-import { TrackData, SongProvider } from "./track.model"
+import { ITrack, SongProvider } from "./track.model"
 import { AudioResource, createAudioResource } from '@discordjs/voice';
 import playdl, { YouTubeStream, YouTubeVideo, InfoData } from 'play-dl'
 import cp from "child_process";
-import { randomUUID } from 'crypto'
+import { randomUUID } from 'crypto';
+import { TrackPriority } from './../utils'
 
-class Track implements TrackData {
+class Track implements ITrack {
+    public priority: TrackPriority;
     public readonly url: string;
-    public readonly provider: SongProvider;
-    public title: string;
-    constructor(url, provider) {
+    public readonly title: string = "NOT_AVAILABLE";
+    public provider: SongProvider;
+    public creationDate: Date;
+
+    constructor(url, title, provider, _priority?: TrackPriority, _creationDate?: Date) {
         this.url = url;
+        this.title = title;
+        this.creationDate = _creationDate? _creationDate : new Date();
         this.provider = provider;
-        // update track title
-        this.getAudioInfo(this.url, this.provider);
+        this.priority = _priority? _priority : TrackPriority.LOW;
     }
 
     /**
@@ -32,32 +37,6 @@ class Track implements TrackData {
             }
 		});
 	}
-
-    private async getAudioInfo(_url: string, _provider: SongProvider) {
-        switch(_provider) {
-            case SongProvider.YOUTUBE:
-                const trackTitle = await this.fetchYoutubeUrlInfo(_url);
-                this.title = trackTitle;
-                break;
-            case SongProvider.SOUNDCLOUD:
-                break;
-            default:
-                break;
-        }
-    }
-
-    private async fetchYoutubeUrlInfo(_url: string){
-        const uuid = randomUUID();
-        let title;
-        try {
-            let yt_info: InfoData = await playdl.video_basic_info(_url, { htmldata : false });
-            title = yt_info.video_details.title;
-            return title
-        } catch (ex) {
-            console.error(`[${new Date().toISOString()}]-[${uuid}]-[PID:${process.pid}] Fail to fetch youtube video information, reason: ${ex.message}`);
-        }
-        return 'NOT_AVAILABLE';
-    }
 
     public getTrackInfo(){
         return { 

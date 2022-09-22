@@ -3,10 +3,10 @@ enum SongProvider {
     SOUNDCLOUD = 'soundcloud'
 }
 
-interface TrackData {
+interface ITrack {
     url: string;
     provider:  SongProvider,
     title: string;
 }
 
-export {TrackData, SongProvider};
+export {ITrack, SongProvider};

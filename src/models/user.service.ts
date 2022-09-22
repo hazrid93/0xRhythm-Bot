@@ -29,7 +29,7 @@ async function createUser(_user: User){
 async function updateUserById(_id: string,_user: User){
     let response = null;
     await getUserModel(async(UserModel: Model<any>) => {
-        const options = { new: true };// return model after updated;
+        const options = { new: true, lean: true };// return model after updated;
         try {
             const mongoRes = UserModel.findByIdAndUpdate(_id, _user, options);
             response = mongoRes;

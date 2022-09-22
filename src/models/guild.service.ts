@@ -2,7 +2,6 @@
 import mongoose, { Model} from 'mongoose';
 import { getGuildModel, User, Guild } from '.';
 import { randomUUID } from 'crypto';
-
 async function createGuild(_guild: Guild){
     let response = null;
     // replace Model<User> with Model<any> if theres issue
