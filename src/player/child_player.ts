@@ -18,8 +18,8 @@ import Discord, { Guild, Interaction, GuildMember, Snowflake, Channel, TextChann
 import { promisify } from 'util';
 import playdl from 'play-dl';
 import { randomUUID } from 'crypto';
-import ffmpeg from 'fluent-ffmpeg';
-import { PassThrough, Readable, Writable } from "stream";
+//import ffmpeg from 'fluent-ffmpeg';
+//import { PassThrough, Readable, Writable } from "stream";
 const wait = promisify(setTimeout);
 const { Client, GatewayIntentBits } = Discord;
 
@@ -107,6 +107,7 @@ async function execute(_url: string, _title: string, _voiceChannel: VoiceBasedCh
     }))
 
     let playDlStream =  await playdl.stream(_url, streamOptions);
+    /*
     let passStream = new PassThrough();
     let ffmpegStream = ffmpeg(playDlStream.stream)
         .format("mp3")
@@ -125,9 +126,11 @@ async function execute(_url: string, _title: string, _voiceChannel: VoiceBasedCh
         .on('end', function() {
            
         }).pipe(passStream, { end: true });
-
+    */
     // Attempt to convert the Track into an AudioResource (i.e. start streaming the video)
-    let resource = createAudioResource(passStream);
+    let resource = createAudioResource(playDlStream.stream, {
+      inputType: playDlStream.type
+    });
     currentPlayer.play(resource);
     if( currentPlayer != null && currentPlayer.listenerCount("stateChange") == 0 ){
       currentPlayer.addListener("stateChange", (_, newOne) => {
