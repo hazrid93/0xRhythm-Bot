@@ -95,7 +95,7 @@ async function execute(_url: string, _title: string, _voiceChannel: VoiceBasedCh
       currentPlayer.setMaxListeners(1);
     }
     let streamOptions = {
-      quality: 1,
+      quality: 2,
       discordPlayerCompatibility: true
     }
 
@@ -145,7 +145,9 @@ async function execute(_url: string, _title: string, _voiceChannel: VoiceBasedCh
         } else if(newOne.status == AudioPlayerStatus.Paused){
           parentPort.postMessage(IPC_STATES_RESP.SONG_PAUSED);
         } else if(newOne.status == AudioPlayerStatus.Playing){
+          sendMessageToGuild('Now playing: ' + _title, _guild);
           parentPort.postMessage(IPC_STATES_RESP.SONG_PLAYING);
+          
           clearTimeout(timeoutId);
           timeoutId = null;
         }
