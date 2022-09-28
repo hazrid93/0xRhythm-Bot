@@ -285,11 +285,9 @@ class Playlist {
 				audioConfig: this.getAudioConfigFfmpeg(),
 				final: true // tells child player to not send signal back to parent to process next queue, use this for alert via TTS
 			};
-
 			const encoded = Buffer.from(JSON.stringify(queueEmptyTrack),'utf-8').toString('base64');
 			if(this.childProcess == null){
-				const trackProcess = new Worker(__dirname + './../player/child_player.ts',{ workerData: {data: encoded }});
-				this.childProcess = trackProcess;
+				new Worker(__dirname + './../player/child_player.ts',{ workerData: {data: encoded }});
 			} else {
 				this.childProcess.postMessage(encoded);
 			}
@@ -339,6 +337,9 @@ class Playlist {
 					case IPC_STATES_RESP.SONG_IDLE:
 						this.playerState = AudioPlayerStatus.Idle;
 						this.processQueue()
+						break;
+					case IPC_STATES_RESP.QUEUE_EMPTY:
+						this.playerState = AudioPlayerStatus.Idle;
 						break;
 					case IPC_STATES_RESP.SONG_PAUSED:
 						this.playerState = AudioPlayerStatus.Paused

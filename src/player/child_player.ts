@@ -112,10 +112,7 @@ async function execute(
       currentPlayer = player;
       currentPlayer.setMaxListeners(1);
     }
-    if(_url == null){
-      // check if url null if its null then its a TTS track.
-      sendMessageToGuild('Now playing: ' + 'TTS-' + randomUUID().slice(0,7), _guild);
-    } else {
+    if(_url != null){
       sendMessageToGuild('Now playing: ' + _title, _guild);
        // get soundcloud free client Id
       await playdl.getFreeClientID().then((clientID) => playdl.setToken({
@@ -171,25 +168,28 @@ async function execute(
     currentPlayer.play(resource);
     if( currentPlayer != null && currentPlayer.listenerCount("stateChange") == 0 ){
       currentPlayer.addListener("stateChange", (_, newOne) => {
-        if(!_final){
-          if (newOne.status == AudioPlayerStatus.Idle) {
+        if (newOne.status == AudioPlayerStatus.Idle) {
+          if(_final){
+            parentPort.postMessage(IPC_STATES_RESP.QUEUE_EMPTY);
+          } else {
             parentPort.postMessage(IPC_STATES_RESP.SONG_IDLE);
-            currentPlayer.removeAllListeners();
-            currentPlayer = null;
-            // set timeout to disconnect in 60 second of idling
-            timeoutId = setTimeout(()=> {
-              if(currentVoiceConnection){
-                exit();
-              }
-            }, 30*60*1000); // leave channel in 30 minute of idle
-          } else if(newOne.status == AudioPlayerStatus.Paused){
-            parentPort.postMessage(IPC_STATES_RESP.SONG_PAUSED);
-          } else if(newOne.status == AudioPlayerStatus.Playing){
-            parentPort.postMessage(IPC_STATES_RESP.SONG_PLAYING);
-            clearTimeout(timeoutId);
-            timeoutId = null;
           }
+          currentPlayer.removeAllListeners();
+          currentPlayer = null;
+          // set timeout to disconnect in 60 second of idling
+          timeoutId = setTimeout(()=> {
+            if(currentVoiceConnection){
+              exit();
+            }
+          }, 10*60*1000); // leave channel in 10 minute of idle
+        } else if(newOne.status == AudioPlayerStatus.Paused){
+          parentPort.postMessage(IPC_STATES_RESP.SONG_PAUSED);
+        } else if(newOne.status == AudioPlayerStatus.Playing){
+          parentPort.postMessage(IPC_STATES_RESP.SONG_PLAYING);
+          clearTimeout(timeoutId);
+          timeoutId = null;
         }
+        
       });
     }
     
