@@ -55,8 +55,9 @@ client.on('ready', async () => {
   const guildId: string = decoded.guildId;
   const userId: string = decoded.userId;
   const audioConfig: string[] = decoded.audioConfig;
-  guild = client.guilds.cache.get(guildId);
-  const userVoiceChannel: VoiceBasedChannel = guild.members.cache.get(userId).voice.channel;
+  guild = await client.guilds.fetch(guildId);
+  const guildMember = await guild.members.fetch(userId);
+  const userVoiceChannel = guildMember.voice.channel;
   await sendMessageToGuild("Joining the voice channel...", guild);
   await execute(url, title, userVoiceChannel, guild, audioConfig);
 });
@@ -245,8 +246,9 @@ parentPort.on('message', async (_message: string) => {
           const guildId: string = decoded.guildId;
           const userId: string = decoded.userId;
           const audioConfig: string[] = decoded.audioConfig;
-          const guild = client.guilds.cache.get(guildId);
-          const userVoiceChannel = guild.members.cache.get(userId).voice.channel;
+          const guild = await client.guilds.fetch(guildId);
+          const guildMember = await guild.members.fetch(userId);
+          const userVoiceChannel = guildMember.voice.channel;
           await execute(url, title, userVoiceChannel, guild, audioConfig);
           break;
       }
