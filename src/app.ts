@@ -11,9 +11,8 @@ import { Playlist } from './playlist';
 import { Guild, createGuild, findGuildById, findGuildByGuildId } from './models';
 import { randomUUID } from "crypto";
 import { HELP_TEXT } from './utils';
-import { YoutubePlayerHandler, SouncloudHandler } from "./handlers";
+import { YoutubePlayerHandler, SouncloudHandler, TextToSpeechHandler } from "./handlers";
 const wait = promisify(setTimeout);
-
 const { Client, GatewayIntentBits } = Discord;
 const clientToken = process.env.STAGING_TOKEN;
 
@@ -124,7 +123,6 @@ client.on('interactionCreate', async (interaction: Interaction)=> {
                     await interaction.followUp(`Track format is not supported!`);
                 }
             }
-           
         } catch (error) {
             console.warn(error);
             await interaction.reply('Failed to play track, please try again later!');
@@ -162,6 +160,32 @@ client.on('interactionCreate', async (interaction: Interaction)=> {
 		} else {
 			await interaction.reply('Not playing in this server!');
 		}
+	} else if (interaction.commandName === 'tts') {
+        const textTTS = interaction.options.get('text').value as string;
+        if (!subscription) {
+            if (interaction.member instanceof GuildMember && interaction.member.voice.channel) {
+                const channel = interaction.member.voice.channel;
+                subscription = new Playlist(guildDbId, guildId, userId, userName);
+                subscriptions.set(interaction.guildId, subscription);
+            }
+        }
+        if (!subscription) {
+            await interaction.reply('Join a voice channel and then try that again!');
+            return;
+        }
+
+        try {
+            let handler = new TextToSpeechHandler(textTTS, subscription);
+            let status = await handler.execute();
+            if(status){
+                await interaction.reply(`TTS track added to queue`);
+            } else {
+                await interaction.reply(`Track format is not supported!`);
+            }
+        } catch (error) {
+            console.warn(error);
+            await interaction.reply('Failed to play text to speech, please try again later!');
+        }
 	} else if (interaction.commandName === 'config') {
         const trebleVal = interaction.options.get('treble').value as number;
         const bassVal = interaction.options.get('bass').value as number;

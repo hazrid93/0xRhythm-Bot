@@ -8,6 +8,8 @@ type ForkObject = {
     guildId: Snowflake;
     userId: string;
     audioConfig: string[];
+    textTTS: string;
+    final: boolean;
 }
 
 export { ForkObject };

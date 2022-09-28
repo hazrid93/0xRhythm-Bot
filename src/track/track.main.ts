@@ -12,17 +12,21 @@ class Track implements ITrack {
     public provider: SongProvider;
     public creationDate: Date;
 
-    constructor(url, title, provider, _priority?: TrackPriority, _creationDate?: Date) {
+    public readonly textTTS: string;
+
+    constructor(url, title, provider, _priority?: TrackPriority, _creationDate?: Date, _textTTS?: string) {
         this.url = url;
         this.title = title;
         this.creationDate = _creationDate? _creationDate : new Date();
         this.provider = provider;
         this.priority = _priority? _priority : TrackPriority.LOW;
+        this.textTTS = _textTTS;
     }
 
     /**
 	 * Creates an AudioResource from this Track.
 	 */
+    /*
      public createAudioResource(): Promise<AudioResource<Track>> {
 		return new Promise(async (resolve, reject) => {
             try { 
@@ -37,7 +41,6 @@ class Track implements ITrack {
             }
 		});
 	}
-
     public getTrackInfo(){
         return { 
             url: this.url,
@@ -45,6 +48,8 @@ class Track implements ITrack {
             title: this.title
         }
     }
+
+    */
 
 }
 

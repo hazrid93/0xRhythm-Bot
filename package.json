@@ -39,6 +39,7 @@
         "mongodb": "^4.9.1",
         "mongoose": "^6.6.0",
         "morgan": "^1.10.0",
+        "node-gtts": "^2.0.2",
         "node-opus": "^0.3.3",
         "pidusage": "^3.0.0",
         "play-dl": "^1.9.5",

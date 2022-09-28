@@ -8,7 +8,7 @@ import {
 	VoiceConnectionStatus,
   AudioPlayer,
 	AudioPlayerStatus,
-	AudioResource,
+	StreamType,
 	createAudioPlayer,
   createAudioResource,
   entersState,
@@ -18,11 +18,12 @@ import Discord, { Guild, Interaction, GuildMember, Snowflake, Channel, TextChann
 import { promisify } from 'util';
 import playdl from 'play-dl';
 import { randomUUID } from 'crypto';
+const gtts = require('node-gtts')('en');
+const path = require('path');
 //import ffmpeg from 'fluent-ffmpeg';
 //import { PassThrough, Readable, Writable } from "stream";
 const wait = promisify(setTimeout);
 const { Client, GatewayIntentBits } = Discord;
-
 const clientToken = process.env.STAGING_TOKEN;
 // timeout for disconnection
 let timeoutId;
@@ -49,17 +50,21 @@ client.on('ready', async () => {
   const decoded = JSON.parse(
     Buffer.from(data, 'base64').toString('utf-8')
   );
+
+  console.log(decoded);
   const url: string = decoded.url;
   const title: string = decoded.title;
   const provider: SongProvider = decoded.provider;
   const guildId: string = decoded.guildId;
   const userId: string = decoded.userId;
+  const textTTS: string = decoded.textTTS;
+  const isFinal: boolean = decoded.final;
   const audioConfig: string[] = decoded.audioConfig;
   guild = await client.guilds.fetch(guildId);
   const guildMember = await guild.members.fetch(userId);
   const userVoiceChannel = guildMember.voice.channel;
   await sendMessageToGuild("Joining the voice channel...", guild);
-  await execute(url, title, userVoiceChannel, guild, audioConfig);
+  await execute(url, title, userVoiceChannel, guild, audioConfig, textTTS, isFinal);
 });
 
 
@@ -73,13 +78,25 @@ async function sendMessageToGuild(_message: string, _guild: Guild){
 }
 
 function exit(){
+  try {
   currentPlayer.removeAllListeners();
   currentVoiceConnection.removeAllListeners()
   currentVoiceConnection.destroy();
-  process.exit(0);
+  } catch(ex) {
+    console.warn(ex.message);
+  } finally {
+    process.exit(0);
+  }
 }
 
-async function execute(_url: string, _title: string, _voiceChannel: VoiceBasedChannel, _guild: Guild, _audioConfig: string[]){
+async function execute(
+  _url: string, 
+  _title: string, 
+  _voiceChannel: VoiceBasedChannel, 
+  _guild: Guild, 
+  _audioConfig: string[], 
+  _textTTS: string,
+  _final: boolean){
     //voice related
     if( currentVoiceConnection == null ){
       const voiceConnection: VoiceConnection = joinVoiceChannel({
@@ -95,23 +112,32 @@ async function execute(_url: string, _title: string, _voiceChannel: VoiceBasedCh
       currentPlayer = player;
       currentPlayer.setMaxListeners(1);
     }
-    sendMessageToGuild('Now playing: ' + _title, _guild);
+    if(_url == null){
+      // check if url null if its null then its a TTS track.
+      sendMessageToGuild('Now playing: ' + 'TTS-' + randomUUID().slice(0,7), _guild);
+    } else {
+      sendMessageToGuild('Now playing: ' + _title, _guild);
+       // get soundcloud free client Id
+      await playdl.getFreeClientID().then((clientID) => playdl.setToken({
+        soundcloud : {
+            client_id : clientID
+        }
+      }))
+    }
+  
     let streamOptions = {
-      quality: 2,
+      quality: 1,
       discordPlayerCompatibility: true
     }
 
-    // get soundcloud free client Id
-    await playdl.getFreeClientID().then((clientID) => playdl.setToken({
-      soundcloud : {
-          client_id : clientID
-      }
-    }))
-
-    let playDlStream =  await playdl.stream(_url, streamOptions);
+    let audioStream =  null;
+    if(_url != null) {
+      audioStream = await playdl.stream(_url, streamOptions);
+    }
+    
     /*
     let passStream = new PassThrough();
-    let ffmpegStream = ffmpeg(playDlStream.stream)
+    let ffmpegStream = ffmpeg(audioStream.stream)
         .format("mp3")
         .audioChannels(2)
         .outputOptions(_audioConfig)
@@ -129,27 +155,40 @@ async function execute(_url: string, _title: string, _voiceChannel: VoiceBasedCh
            
         }).pipe(passStream, { end: true });
     */
+
     // Attempt to convert the Track into an AudioResource (i.e. start streaming the video)
-    let resource = createAudioResource(playDlStream.stream, {
-      inputType: playDlStream.type
-    });
+    let resource = null;
+    if(_url == null) {
+      resource = createAudioResource(gtts.stream(_textTTS), {
+        inputType: StreamType.Arbitrary
+      });
+    } else {
+      resource = createAudioResource(audioStream.stream, {
+        inputType: audioStream.type
+      });
+    }
+
     currentPlayer.play(resource);
     if( currentPlayer != null && currentPlayer.listenerCount("stateChange") == 0 ){
       currentPlayer.addListener("stateChange", (_, newOne) => {
-        if (newOne.status == AudioPlayerStatus.Idle) {
-          parentPort.postMessage(IPC_STATES_RESP.SONG_IDLE);
-          // set timeout to disconnect in 60 second of idling
-          timeoutId = setTimeout(()=> {
-            if(currentVoiceConnection){
-              exit();
-            }
-          }, 30*60*1000); // leave channel in 30 minute of idle
-        } else if(newOne.status == AudioPlayerStatus.Paused){
-          parentPort.postMessage(IPC_STATES_RESP.SONG_PAUSED);
-        } else if(newOne.status == AudioPlayerStatus.Playing){
-          parentPort.postMessage(IPC_STATES_RESP.SONG_PLAYING);
-          clearTimeout(timeoutId);
-          timeoutId = null;
+        if(!_final){
+          if (newOne.status == AudioPlayerStatus.Idle) {
+            parentPort.postMessage(IPC_STATES_RESP.SONG_IDLE);
+            currentPlayer.removeAllListeners();
+            currentPlayer = null;
+            // set timeout to disconnect in 60 second of idling
+            timeoutId = setTimeout(()=> {
+              if(currentVoiceConnection){
+                exit();
+              }
+            }, 30*60*1000); // leave channel in 30 minute of idle
+          } else if(newOne.status == AudioPlayerStatus.Paused){
+            parentPort.postMessage(IPC_STATES_RESP.SONG_PAUSED);
+          } else if(newOne.status == AudioPlayerStatus.Playing){
+            parentPort.postMessage(IPC_STATES_RESP.SONG_PLAYING);
+            clearTimeout(timeoutId);
+            timeoutId = null;
+          }
         }
       });
     }
@@ -245,11 +284,14 @@ parentPort.on('message', async (_message: string) => {
           const provider: SongProvider = decoded.provider;
           const guildId: string = decoded.guildId;
           const userId: string = decoded.userId;
+          const textTTS: string = decoded.textTTS;
+          const isFinal: boolean = decoded.final;
           const audioConfig: string[] = decoded.audioConfig;
           const guild = await client.guilds.fetch(guildId);
           const guildMember = await guild.members.fetch(userId);
           const userVoiceChannel = guildMember.voice.channel;
-          await execute(url, title, userVoiceChannel, guild, audioConfig);
+          console.log(decoded);
+          await execute(url, title, userVoiceChannel, guild, audioConfig, textTTS, isFinal);
           break;
       }
     }

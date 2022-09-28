@@ -168,7 +168,9 @@ class Playlist {
 	 */
 	public enqueue(_track: Track) {
 		this.queue.enqueue(_track);
-		this.updateUser(_track); // no need to await because we dont need the response.
+		if(_track.url != null){
+			this.updateUser(_track); // no need to await because we dont need the response.
+		}
 		this.processQueue();
 	}
 
@@ -227,7 +229,10 @@ class Playlist {
 	// queue only without processing
 	public strictEnqueue(_track: Track) {
 		this.queue.enqueue(_track);
-		this.updateUser(_track);
+		if(_track.url != null){
+			this.updateUser(_track);
+		}
+		
 	}
 
 	// manually start the queue processs, mainly use for playlist
@@ -265,26 +270,50 @@ class Playlist {
 		// If the queue is locked (already being processed), is empty, or the audio player is already playing something, return
 		if (this.queueLock 
 			|| (this.playerState !== AudioPlayerStatus.Idle && this.playerState != null)
-			|| this.queue.length() === 0) {
+		) {
 			return;
 		}
+
+		if(this.queue.length() === 0){
+			const queueEmptyTrack: ForkObject = {
+				title: null,
+				url: null,
+				provider: null,
+				textTTS: 'Queue is empty!',
+				guildId: this.guildId,
+				userId: this.userId,
+				audioConfig: this.getAudioConfigFfmpeg(),
+				final: true // tells child player to not send signal back to parent to process next queue, use this for alert via TTS
+			};
+
+			const encoded = Buffer.from(JSON.stringify(queueEmptyTrack),'utf-8').toString('base64');
+			if(this.childProcess == null){
+				const trackProcess = new Worker(__dirname + './../player/child_player.ts',{ workerData: {data: encoded }});
+				this.childProcess = trackProcess;
+			} else {
+				this.childProcess.postMessage(encoded);
+			}
+			return;
+		}
+
 		// Lock the queue to guarantee safe access
 		this.queueLock = true;
-
 		const nextTrack: Track = this.queue.dequeue();
 
 		// create base64 encode of data buffer for data we want to pass to child process
-		const forkObj: ForkObject = {
+		const audioTrack: ForkObject = {
 			title: nextTrack.title,
 			url: nextTrack.url,
 			provider: nextTrack.provider,
+			textTTS: nextTrack.textTTS,
 			guildId: this.guildId,
 			userId: this.userId,
-			audioConfig: this.getAudioConfigFfmpeg()
+			audioConfig: this.getAudioConfigFfmpeg(),
+			final: false
 		};
 
 		try {
-			const encoded = Buffer.from(JSON.stringify(forkObj),'utf-8').toString('base64');
+			const encoded = Buffer.from(JSON.stringify(audioTrack),'utf-8').toString('base64');
 			if(this.childProcess == null){
 			//	const trackProcess = cp.fork(__dirname + './../player/child_player.ts', [encoded]);
 				const trackProcess = new Worker(__dirname + './../player/child_player.ts',{ workerData: {data: encoded }});
