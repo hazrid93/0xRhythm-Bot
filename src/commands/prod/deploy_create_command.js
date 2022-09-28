@@ -11,10 +11,10 @@ const commands = [
 	new SlashCommandBuilder().setName('clear').setDescription('Clear existing queue'),
 	new SlashCommandBuilder().setName('status').setDescription('Get process status'),
 	new SlashCommandBuilder().setName('tts').setDescription('Run text to speech stream')
-	.addStringOption(option =>
-		option.setName('text')
-			.setDescription('The text to be voiced')
-			.setRequired(true)),
+		.addStringOption(option =>
+			option.setName('text')
+				.setDescription('The text to be voiced')
+				.setRequired(true)),
 	new SlashCommandBuilder().setName('config').setDescription('Set the audio config e.x: bass, treble')
 		.addNumberOption(option =>
 			option.setName('bass')

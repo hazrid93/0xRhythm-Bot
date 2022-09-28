@@ -79,9 +79,13 @@ async function sendMessageToGuild(_message: string, _guild: Guild){
 
 function exit(){
   try {
-  currentPlayer.removeAllListeners();
-  currentVoiceConnection.removeAllListeners()
-  currentVoiceConnection.destroy();
+    if(currentPlayer != null){
+      currentPlayer.removeAllListeners();
+    }
+    if(currentVoiceConnection != null){
+      currentVoiceConnection.removeAllListeners()
+      currentVoiceConnection.destroy();
+    }
   } catch(ex) {
     console.warn(ex.message);
   } finally {
