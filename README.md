@@ -24,6 +24,7 @@ Simple little music bot to queue up and play youtube audio over discord voice ch
 /resume Resume the current track that is playing.
 /queue Prints the current playlist in the guild.
 /status Get status of the server.
+/tts <text: text that you want TTS to transmit to current user channel> 
 /config 
     - <bass: 0-20 .Set the bass value for the subsequent track in playlist.>
     - <treble: 0-20 .Set the treble value for the subsequent track in playlist.>
