@@ -2,6 +2,8 @@
 
 Node.js | Discord audio bot featuring play-dl to stream audio from YouTube & Soundcloud. Supports user/guild history using MongoDB and priority queue feature for playlist.
 
+## Architecture (DeepWiki)
+- architecture document [link](https://deepwiki.com/hazrid93/0xRhythm-Bot)
 ## Invite link for bot im running on my instance
 - inv url [link](https://discord.com/api/oauth2/authorize?client_id=935569503729897562&permissions=1084516956992&scope=bot%20applications.commands)
 
